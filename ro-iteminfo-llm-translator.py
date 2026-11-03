@@ -239,7 +239,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
     aguardar_retomada()
     return traducao_marcada
 
-def traduzir_linha(texto, is_nome_item, onde):
+def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
     """Traduz uma string protegendo cores, escapes Lua e patterns estruturais."""
     esquerda = texto[:len(texto) - len(texto.lstrip())]
     direita = texto[len(texto.rstrip()):]
@@ -255,7 +255,12 @@ def traduzir_linha(texto, is_nome_item, onde):
         return esquerda + prefixo_lista + texto_limpo + direita
 
     texto_marcado, tags = extrair_preservando_tags(texto_limpo)
-    traducao = traduzir_trecho(texto_marcado, is_nome_item, onde)
+    traducao = traduzir_trecho(
+        texto_marcado,
+        is_nome_item,
+        onde,
+        reforcar_marcadores=reforcar_marcadores,
+    )
 
     if RE_MARCADOR.findall(texto_marcado) != RE_MARCADOR.findall(traducao):
         return texto
@@ -369,7 +374,12 @@ def traduzir_bloco_descricoes(conteudo_linhas, onde):
     # (null) tem tratamento próprio no tradutor atual; não misture com um bloco maior.
     if any("(null)" in texto for _, texto in conteudo_linhas):
         return [
-            traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+            traduzir_linha(
+                texto,
+                False,
+                f"{onde}, linha {indice + 1}",
+                reforcar_marcadores=True,
+            )
             for indice, texto in conteudo_linhas
         ]
 
@@ -425,14 +435,24 @@ def traduzir_bloco_descricoes(conteudo_linhas, onde):
                 # O fallback registrará somente as linhas que realmente falharem.
                 del para_revisar[revisoes_antes:]
                 return [
-                    traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+                    traduzir_linha(
+                        texto,
+                        False,
+                        f"{onde}, linha {indice + 1}",
+                        reforcar_marcadores=True,
+                    )
                     for indice, texto in conteudo_linhas
                 ]
         else:
             print(f"[FALLBACK] {onde} — falha não relacionada a marcadores.")
             del para_revisar[revisoes_antes:]
             return [
-                traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+                traduzir_linha(
+                    texto,
+                    False,
+                    f"{onde}, linha {indice + 1}",
+                    reforcar_marcadores=True,
+                )
                 for indice, texto in conteudo_linhas
             ]
 
@@ -449,7 +469,12 @@ def traduzir_bloco_descricoes(conteudo_linhas, onde):
 
     if len(textos_traduzidos) != len(conteudo_linhas):
         return [
-            traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+            traduzir_linha(
+                texto,
+                False,
+                f"{onde}, linha {indice + 1}",
+                reforcar_marcadores=True,
+            )
             for indice, texto in conteudo_linhas
         ]
 
