@@ -132,16 +132,23 @@ def aguardar_retomada():
     if evento_stop.is_set():
         raise InterruptedError("Tradução encerrada.")
 
-def montar_mensagens(texto, is_nome_item):
+def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
     # --- PROMPTS ---
+    instrucao_system = (
+        "Traduza do inglês para português brasileiro. "
+        "Responda somente com a tradução. "
+        "Não explique, não comente e não repita instruções."
+    )
+    if reforcar_marcadores:
+        instrucao_system += (
+            " Confira se todos os marcadores presentes no texto foram preservados "
+            "exatamente, sem omissões, duplicações ou alterações."
+        )
+
     return [
         {
             "role": "system",
-            "content": (
-                "Traduza do inglês para português brasileiro. "
-                "Responda somente com a tradução. "
-                "Não explique, não comente e não repita instruções."
-            )
+            "content": instrucao_system
         },
         {
             "role": "user",
@@ -175,7 +182,7 @@ def motivo_recusa(original, traducao):
         return "código de cor inventado"
     return None
 
-def traduzir_trecho(texto, is_nome_item, onde):
+def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
     """
     Traduz e armazena o par mensagem/resposta exatamente como enviado à LLM.
     Se o texto contiver placeholders semânticos (_COR1, _TOKEN1...), ambos permanecem no cache.
@@ -199,7 +206,7 @@ def traduzir_trecho(texto, is_nome_item, onde):
 
     try:
         response = llm.create_chat_completion(
-            messages=montar_mensagens(texto, is_nome_item),
+            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores),
             temperature=0.1,
             max_tokens=min(3048, len(texto) * 64),
         )
@@ -371,12 +378,63 @@ def traduzir_bloco_descricoes(conteudo_linhas, onde):
 
     marcadores_esperados = RE_MARCADOR.findall(texto_unido)
     marcadores_recebidos = RE_MARCADOR.findall(traducao_unida)
-    if len(para_revisar) > revisoes_antes or marcadores_recebidos != marcadores_esperados:
-        # A tradução agregada falhou na validação. Recupera o bloco pelo caminho individual.
-        return [
-            traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
-            for indice, texto in conteudo_linhas
-        ]
+    houve_falha = (
+        len(para_revisar) > revisoes_antes
+        or marcadores_recebidos != marcadores_esperados
+    )
+
+    if houve_falha:
+        # traduzir_trecho devolve o original quando rejeita uma resposta.
+        # Por isso, a diferença de marcadores também precisa ser identificada
+        # pelo motivo registrado em para_revisar.
+        falha_marcadores = (
+            marcadores_recebidos != marcadores_esperados
+            or any(
+                motivo.startswith(
+                    "marcadores de estrutura/cor perdidos, alterados ou reordenados"
+                )
+                for _, _, motivo in para_revisar[revisoes_antes:]
+            )
+        )
+
+        if falha_marcadores:
+            print(f"[RETRY] {onde} — nova tentativa após falha de marcadores.")
+            revisoes_antes_retry = len(para_revisar)
+            traducao_retry = traduzir_trecho(
+                texto_unido,
+                False,
+                f"{onde} (retry)",
+                reforcar_marcadores=True,
+            )
+            marcadores_retry = RE_MARCADOR.findall(traducao_retry)
+
+            retry_ok = (
+                len(para_revisar) == revisoes_antes_retry
+                and marcadores_retry == marcadores_esperados
+            )
+
+            if retry_ok:
+                # Remove o registro da primeira tentativa, agora recuperada.
+                del para_revisar[revisoes_antes:revisoes_antes_retry]
+                traducao_unida = traducao_retry
+                marcadores_recebidos = marcadores_retry
+                print(f"[RETRY OK] {onde} — bloco recuperado e cacheado.")
+            else:
+                print(f"[RETRY FALHOU] {onde} — acionando fallback linha a linha.")
+                # Registros de tentativas do bloco não representam falhas finais.
+                # O fallback registrará somente as linhas que realmente falharem.
+                del para_revisar[revisoes_antes:]
+                return [
+                    traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+                    for indice, texto in conteudo_linhas
+                ]
+        else:
+            print(f"[FALLBACK] {onde} — falha não relacionada a marcadores.")
+            del para_revisar[revisoes_antes:]
+            return [
+                traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+                for indice, texto in conteudo_linhas
+            ]
 
     textos_traduzidos = []
     inicio_trecho = 0
