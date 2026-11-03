@@ -234,8 +234,14 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
         detalhe = f"{motivo}: {traducao_marcada!r}"
         para_revisar.append((onde, texto, detalhe))
         print(f"[CACHE NÃO GRAVADO] {onde} — {motivo}")
-        print(f"  Marcadores esperados: {RE_MARCADOR.findall(texto)}")
-        print(f"  Marcadores recebidos: {RE_MARCADOR.findall(traducao_marcada)}")
+        marcadores_esperados = " ".join(
+            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)
+        )
+        marcadores_recebidos = " ".join(
+            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(traducao_marcada)
+        )
+        print(f"  Marcadores esperados: {marcadores_esperados}")
+        print(f"  Marcadores recebidos: {marcadores_recebidos}")
         return texto  # mantém a mensagem marcada original; não grava resposta inválida.
 
     # IMPORTANTE: grava antes de restaurar tags. A chave E o valor ficam com placeholders.
