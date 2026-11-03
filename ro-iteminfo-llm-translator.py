@@ -137,7 +137,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
     instrucao_system = (
         "Traduza do inglês para português brasileiro. "
         "Responda somente com a tradução. "
-        "Não explique, não comente e não repita instruções."
+        "Não explique, não comente, não remova ou tente traduzir palavras que você não conhece e não repita instruções."
     )
     if reforcar_marcadores:
         marcadores_esperados = [
