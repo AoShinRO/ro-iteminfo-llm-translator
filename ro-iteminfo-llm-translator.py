@@ -146,10 +146,8 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
         if marcadores_esperados:
             sequencia_marcadores = " ".join(marcadores_esperados)
             instrucao_system += (
-                " Os marcadores obrigatórios de retorno são: "
-                f"{sequencia_marcadores}. "
-                "Preserve a sequência de cada marcador exatamente como escrito, uma única vez."
-                "Não omita, duplique, renomeie ou altere nenhum deles."
+                "Preserve a sequência de cada marcador exatamente como escrito no texto."
+                f"{sequencia_marcadores}."
             )
 
     return [
@@ -208,14 +206,16 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
 
     if "(null)" in texto:
         return "(null)"
-
+    if " " == texto:
+        return " "
+        
     aguardar_retomada()
 
     try:
         response = llm.create_chat_completion(
             messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores),
-            temperature=0.1,
-            max_tokens=min(3048, len(texto) * 64),
+            temperature=0.0,
+            max_tokens=min(3072, len(texto) * 64),
         )
         conteudo_cru = response['choices'][0]['message']['content']
         traducao_marcada = limpar_resposta(conteudo_cru, texto)
@@ -247,7 +247,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
     # IMPORTANTE: grava antes de restaurar tags. A chave E o valor ficam com placeholders.
     # Assim, o próximo processamento reutiliza a tradução marcada e só então restaura
     # cores, escapes Lua e separadores conforme a tabela de tags reconstruída no bloco.
-    cache_traducoes[chave] = traducao_marcada
+    cache_traducoes[chave.replace('\\\"',"'")] = traducao_marcada.replace('\\\"',"'")
     salvar_cache()
     aguardar_retomada()
     return traducao_marcada
@@ -549,6 +549,7 @@ def escapar_string_lua(texto):
         .replace("\r", "\\n")
         .replace("\n", "\\n")
         .replace('\\"', "'")
+        .replace('\\\"', "'")
     )
 
     for indice, escape in enumerate(escapes_lua):

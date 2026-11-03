@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Folder Save
+.tradutor_iteminfo_ultima_selecao.json
