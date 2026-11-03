@@ -146,7 +146,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
         if marcadores_esperados:
             sequencia_marcadores = " ".join(marcadores_esperados)
             instrucao_system += (
-                "Preserve a sequência de cada marcador exatamente como escrito no texto."
+                "REGRA: Preserve a sequência de cada marcador exatamente como escrito no texto."
                 f"{sequencia_marcadores}."
             )
 
