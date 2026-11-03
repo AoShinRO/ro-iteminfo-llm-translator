@@ -140,10 +140,17 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
         "Não explique, não comente e não repita instruções."
     )
     if reforcar_marcadores:
-        instrucao_system += (
-            " Confira se todos os marcadores presentes no texto foram preservados "
-            "exatamente, sem omissões, duplicações ou alterações."
-        )
+        marcadores_esperados = [
+            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)
+        ]
+        if marcadores_esperados:
+            sequencia_marcadores = " ".join(marcadores_esperados)
+            instrucao_system += (
+                " Os marcadores obrigatórios de retorno são: "
+                f"{sequencia_marcadores}. "
+                "Preserve cada marcador exatamente como escrito, uma única vez e "
+                "na mesma ordem. Não omita, duplique, renomeie ou altere nenhum deles."
+            )
 
     return [
         {
