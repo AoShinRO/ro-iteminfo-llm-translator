@@ -148,8 +148,8 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
             instrucao_system += (
                 " Os marcadores obrigatórios de retorno são: "
                 f"{sequencia_marcadores}. "
-                "Preserve cada marcador exatamente como escrito, uma única vez e "
-                "na mesma ordem. Não omita, duplique, renomeie ou altere nenhum deles."
+                "Preserve a sequência de cada marcador exatamente como escrito, uma única vez."
+                "Não omita, duplique, renomeie ou altere nenhum deles."
             )
 
     return [
