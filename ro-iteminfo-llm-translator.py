@@ -612,7 +612,48 @@ def escapar_string_lua(texto):
     for indice, escape in enumerate(escapes_lua):
         texto = texto.replace(f"\x00ITEMINFO_LUA_ESCAPE_{indice}\x00", escape)
     return texto
+    
+def detectar_threads_para_inferencia():
+    """
+    Detecta o número ideal de threads para inferência LLM.
 
+    - Prefere núcleos físicos (evita oversubscription por SMT, que reduz
+      throughput por contenção de memória).
+    - Reserva 1 thread para o SO/UI, evitando travamentos no Tkinter
+      durante builds que rodam 100% em CPU.
+    - Permite override via variável de ambiente TRADUTOR_THREADS, útil
+      para CI/workflows que precisam de controle explícito.
+    """
+    override = os.environ.get("TRADUTOR_THREADS")
+    if override:
+        try:
+            n = int(override)
+            if n > 0:
+                print(f"[THREADS] Usando override via TRADUTOR_THREADS={n}")
+                return n
+        except ValueError:
+            print(f"[AVISO] TRADUTOR_THREADS inválido ({override!r}); ignorando.")
+
+    try:
+        import psutil
+        fisicos = psutil.cpu_count(logical=False)
+        if fisicos and fisicos > 0:
+            threads = max(1, fisicos - 1)
+            print(f"[THREADS] Detectados {fisicos} núcleos físicos; usando {threads}.")
+            return threads
+    except ImportError:
+        print("[AVISO] psutil não instalado; detecção cairá no fallback. "
+              "Recomendado: pip install psutil")
+
+    # Fallback: os.cpu_count() retorna lógicos em muitas plataformas.
+    # Em CPUs sem SMT (Phenom II, i5 antigos) o valor está correto;
+    # em CPUs com SMT pode superestimar (oversubscription), mas é
+    # preferível a travar com um número fixo.
+    logicos = os.cpu_count() or 4
+    threads = max(1, logicos - 1)
+    print(f"[THREADS] Fallback: {logicos} núcleos lógicos detectados; usando {threads}.")
+    return threads
+    
 def executar_traducao(caminho_entrada, caminho_modelo, fila):
     global CAMINHO_ENTRADA, CAMINHO_SAIDA, CAMINHO_CACHE, CAMINHO_REVISAR
     global NOME_MODELO_GGUF, CAMINHO_ESTADO, cache_traducoes, para_revisar, llm
@@ -785,7 +826,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
     llm = Llama(
         model_path=NOME_MODELO_GGUF,
         n_ctx=3072,
-        n_threads=6,
+        n_threads=detectar_threads_para_inferencia(),
         n_gpu_layers=-1,
         verbose=False
     )
