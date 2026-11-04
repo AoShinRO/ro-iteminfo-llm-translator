@@ -121,32 +121,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do NumPy sem AVX falhou."
           }
-
+          
+      - name: Set up MSVC environment
+        if: matrix.backend == 'cuda'
+        uses: ilammy/msvc-dev-cmd@v1
+        
       - name: Build llama.cpp with CUDA
         if: matrix.backend == 'cuda'
         shell: pwsh
         run: |
           $cudaRoot = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6"
+          $nvcc = Join-Path $cudaRoot "bin\nvcc.exe"
+
+          if (-not (Test-Path $nvcc)) {
+            throw "nvcc não encontrado em $nvcc."
+          }
+
           $env:CUDA_PATH = $cudaRoot
           $env:CUDA_PATH_V12_6 = $cudaRoot
-          $env:PATH += ";$cudaRoot\bin;$cudaRoot\libnvvp"
-          $env:CUDACXX = "$cudaRoot\bin\nvcc.exe"
+          $env:CUDACXX = $nvcc
+          $env:PATH = "$cudaRoot\bin;$env:PATH"
 
-          # Ativa toolchain do Visual Studio
-          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          # Usa Ninja com o ambiente MSVC preparado no passo anterior.
+          $env:CMAKE_GENERATOR = "Ninja"
 
-          $env:CMAKE_ARGS = "-DGGML_CUDA=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_NATIVE=OFF -DCMAKE_CUDA_COMPILER='C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/bin/nvcc.exe'"
+          # Opções CUDA conforme o README.
+          $env:CMAKE_ARGS = "-DGGML_CUDA=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_NATIVE=OFF"
           $env:FORCE_CMAKE = "1"
 
-          python -m pip install typing_extensions librosa wheel setuptools
-          python -m pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
-          }
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
-          python -m install numpy --no-binary numpy --force-reinstall --config-settings=setup-args="-Dcpu-baseline=none" --config-settings=setup-args="-Dcpu-dispatch=none"
-          if ($LASTEXITCODE -ne 0) {
-            throw "A compilação do NumPy sem AVX falhou."
           }
           
       - name: Package windowed one-file app
@@ -161,7 +166,7 @@ jobs:
           }
 
           Compress-Archive `
-            -Path "dist/$env:APP_NAME.exe" `
+            -Path "D:/a/ro-iteminfo-llm-translator/ro-iteminfo-llm-translator/$env:APP_NAME.exe" `
             -DestinationPath "$env:APP_NAME.zip" `
             -CompressionLevel Optimal
 
