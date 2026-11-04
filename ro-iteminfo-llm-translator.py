@@ -671,7 +671,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         try:
             with open(CAMINHO_REVISAR, "r", encoding="utf-8") as f:
                 for registro in f:
-                    falha = re.match(r"ID (\\d+)\\b", registro)
+                    falha = re.match(r"ID (\d+)\b", registro)
                     if falha:
                         item_com_falha = falha.group(1)
                         if item_com_falha in concluidos:
@@ -686,7 +686,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
     if os.path.isfile(CAMINHO_SAIDA):
         try:
             with open(CAMINHO_SAIDA, "r", encoding=ENCODING_ARQUIVO) as f:
-                linhas_saida_existente = f.read().split("\\n")
+                linhas_saida_existente = f.read().split("\n")
             if linhas_saida_existente and linhas_saida_existente[-1] == "":
                 linhas_saida_existente.pop()
             if not estado_valido:
@@ -696,7 +696,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                     id_bloco = None
                     buffer = []
                     for linha_fonte in linhas_fonte:
-                        match = re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linha_fonte)
+                        match = re.match(r"^\s*\[(\d+)\]\s*=\s*\{", linha_fonte)
                         if match:
                             if id_bloco is not None:
                                 destino[id_bloco] = buffer
@@ -778,7 +778,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         inicio_bloco = None
         id_bloco = None
         for pos, linha_fonte in enumerate(linhas + [""]):
-            match = re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linha_fonte) if pos < len(linhas) else None
+            match = re.match(r"^\s*\[(\d+)\]\s*=\s*\{", linha_fonte) if pos < len(linhas) else None
             if match or pos == len(linhas):
                 if id_bloco in concluidos and inicio_bloco is not None:
                     linhas[inicio_bloco:pos] = linhas_saida_existente[inicio_bloco:pos]
@@ -812,7 +812,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 # O bloco já está traduzido e foi preservado da saída anterior.
                 # Salta diretamente para o próximo ID, sem analisar/traduzir suas linhas.
                 proximo = indice + 1
-                while proximo < len(linhas) and not re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linhas[proximo]):
+                while proximo < len(linhas) and not re.match(r"^\s*\[(\d+)\]\s*=\s*\{", linhas[proximo]):
                     proximo += 1
                 indice = proximo
                 continue
