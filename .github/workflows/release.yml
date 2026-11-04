@@ -38,7 +38,7 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install pyinstaller customtkinter cmake ninja
+          python -m pip install pyinstaller customtkinter cmake ninja typing_extensions diskcache
 
       - name: Install Vulkan SDK
         if: matrix.backend == 'vulkan'
@@ -94,8 +94,7 @@ jobs:
       - name: Build llama.cpp with Vulkan
         if: matrix.backend == 'vulkan'
         shell: pwsh
-        run: |
-          python -m pip install typing_extensions        
+        run: |   
           $sdk = Get-ChildItem "C:\VulkanSDK" -Directory |
             Sort-Object Name -Descending |
             Select-Object -First 1
@@ -130,7 +129,6 @@ jobs:
         if: matrix.backend == 'cuda'
         shell: pwsh
         run: |
-          python -m pip install typing_extensions
           $cudaRoot = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6"
           $nvcc = Join-Path $cudaRoot "bin\nvcc.exe"
 
