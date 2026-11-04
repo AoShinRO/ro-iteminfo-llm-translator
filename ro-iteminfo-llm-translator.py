@@ -27,6 +27,7 @@ import re
 import json
 import sys
 import threading
+import time
 import queue
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -720,6 +721,16 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
             linhas_saida_existente = None
             print(f"[AVISO] Não foi possível recuperar progresso do arquivo de saída: {erro_estado}")
 
+    # ETA incremental: média aritmética atualizada a cada item finalizado.
+    # O contador de restantes considera apenas itens ainda não processados nesta execução.
+    metricas_eta = {
+        "total": max(0, len(ids_itens) - len(concluidos)),
+        "processados": 0,
+        "amostras": 0,
+        "media_segundos": None,
+        "inicio_item": None,
+    }
+
     def salvar_estado():
         temporario = CAMINHO_ESTADO + ".tmp"
         with open(temporario, "w", encoding="utf-8") as f:
@@ -730,11 +741,25 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         os.replace(temporario, CAMINHO_ESTADO)
 
     def notificar(item_id, nome):
-        fila.put(("progresso", len(concluidos), len(ids_itens), item_id, nome))
+        restantes = max(0, metricas_eta["total"] - metricas_eta["processados"])
+        media = metricas_eta["media_segundos"]
+        eta_segundos = media * restantes if media is not None else None
+        fila.put(("progresso", len(concluidos), len(ids_itens), item_id, nome,
+                  eta_segundos, restantes))
 
     def concluir_item(item_id):
         if item_id is None:
             return
+
+        inicio = metricas_eta["inicio_item"]
+        if inicio is not None:
+            duracao = max(0.0, time.monotonic() - inicio)
+            metricas_eta["amostras"] += 1
+            n = metricas_eta["amostras"]
+            media_anterior = metricas_eta["media_segundos"] or 0.0
+            metricas_eta["media_segundos"] = media_anterior + (duracao - media_anterior) / n
+            metricas_eta["processados"] += 1
+            metricas_eta["inicio_item"] = None
         prefixo_falha = f"ID {item_id} "
         falhou = any(onde.startswith(prefixo_falha) for onde, _, _ in para_revisar)
         if falhou:
@@ -743,12 +768,18 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         elif item_id not in concluidos:
             concluidos.add(item_id)
         salvar_estado()
-        fila.put(("progresso", len(concluidos), len(ids_itens), item_id, "Item concluído" if not falhou else "Item pendente para revisão"))
+        restantes = max(0, metricas_eta["total"] - metricas_eta["processados"])
+        media = metricas_eta["media_segundos"]
+        eta_segundos = media * restantes if media is not None else None
+        fila.put(("progresso", len(concluidos), len(ids_itens), item_id,
+                  "Item concluído" if not falhou else "Item pendente para revisão",
+                  eta_segundos, restantes))
 
     # Se a execução foi pausada, aguarda aqui antes de carregar o modelo.
     aguardar_retomada()
 
-    fila.put(("progresso", len(concluidos), len(ids_itens), "", "Preparando modelo..."))
+    restantes_iniciais = max(0, metricas_eta["total"] - metricas_eta["processados"])
+    fila.put(("progresso", len(concluidos), len(ids_itens), "", "Preparando modelo...", None, restantes_iniciais))
     print("Carregando o modelo LLM Local para tradução de itens...")
     from llama_cpp import Llama
     llm = Llama(
@@ -820,6 +851,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 indice = proximo
                 continue
             item_atual_id = novo_id
+            metricas_eta["inicio_item"] = time.monotonic()
             notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
        
         # 1. Aplica o texto padrão da Lupa
@@ -941,6 +973,17 @@ def executar_com_tratamento(caminho_entrada, caminho_modelo, fila):
         fila.put(("erro", str(erro)))
 
 
+def formatar_duracao_eta(segundos):
+    segundos = max(0, int(segundos))
+    horas, resto = divmod(segundos, 3600)
+    minutos, segundos = divmod(resto, 60)
+    if horas:
+        return f"{horas}h {minutos:02d}m"
+    if minutos:
+        return f"{minutos}m {segundos:02d}s"
+    return f"{segundos}s"
+
+
 class TradutorGUI(ctk.CTk):
     BG = "#111318"
     PANEL = "#1b1f27"
@@ -1006,6 +1049,12 @@ class TradutorGUI(ctk.CTk):
                                            font=ctk.CTkFont(size=27, weight="bold"),
                                            text_color="black")
         self.progress_text.place(relx=0.5, rely=0.5, anchor="center")
+        self.eta_text = ctk.CTkLabel(
+            self.progress_outer, text="ETA calculando... · 0 restantes",
+            fg_color="transparent", font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#111318", anchor="e"
+        )
+        self.eta_text.place(relx=0.985, rely=0.5, anchor="e")
         self.item_text = ctk.CTkLabel(corpo, text="Aguardando seleção...", fg_color="transparent",
                                       font=ctk.CTkFont(size=18), text_color="#e7eaf0")
         self.item_text.pack(anchor="w", pady=(9, 0))
@@ -1107,8 +1156,16 @@ class TradutorGUI(ctk.CTk):
             while True:
                 evento = self.fila.get_nowait()
                 if evento[0] == "progresso":
-                    _, feitos, total, item_id, nome = evento
+                    _, feitos, total, item_id, nome, eta_segundos, restantes = evento
                     percentual = (feitos / total) if total else 0
+                    eta_formatado = (
+                        "calculando..." if eta_segundos is None
+                        else formatar_duracao_eta(eta_segundos)
+                    )
+                    restantes_formatados = f"{restantes:,}".replace(",", ".")
+                    self.eta_text.configure(
+                        text=f"ETA {eta_formatado} · {restantes_formatados} restantes"
+                    )
                     largura = max(0, int(self.progress_outer.winfo_width() * percentual))
                     self.progress_fill.place_configure(relwidth=percentual)
                     self.progress_text.configure(text=f"{percentual:.0%}")
@@ -1130,6 +1187,7 @@ class TradutorGUI(ctk.CTk):
                     _, feitos, total, saida = evento
                     self.progress_fill.place_configure(relwidth=1)
                     self.progress_text.configure(text="100%")
+                    self.eta_text.configure(text="Concluído · 0 restantes")
                     self.item_text.configure(text="Tradução concluída!")
                     self.status.configure(text=f"Arquivo gerado: {saida}")
                     self.executando = False
