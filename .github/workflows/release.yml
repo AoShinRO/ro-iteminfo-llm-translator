@@ -95,6 +95,7 @@ jobs:
         if: matrix.backend == 'vulkan'
         shell: pwsh
         run: |
+          python -m pip install typing_extensions        
           $sdk = Get-ChildItem "C:\VulkanSDK" -Directory |
             Sort-Object Name -Descending |
             Select-Object -First 1
