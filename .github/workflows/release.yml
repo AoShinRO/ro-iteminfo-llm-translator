@@ -165,13 +165,26 @@ jobs:
           APP_NAME: RoItemInfoTranslator-${{ matrix.artifact }}
         run: |
           python -m pip install nuitka
-          python -m nuitka --standalone --onefile --plugin-enable=tk-inter --include-package=customtkinter --assume-yes-for-downloads ro-iteminfo-llm-translator.py
+          python -m nuitka `
+            --standalone `
+            --onefile `
+            --enable-plugin=tk-inter `
+            --include-package=customtkinter `
+            --assume-yes-for-downloads `
+            --output-dir=dist `
+            "--output-filename=$env:APP_NAME.exe" `
+            ro-iteminfo-llm-translator.py
+
           if ($LASTEXITCODE -ne 0) {
-            throw "O empacotamento com PyInstaller falhou."
+            throw "O empacotamento com Nuitka falhou."
           }
 
+          $exe = "dist/$env:APP_NAME.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Executável esperado não encontrado: $exe"
+          }
           Compress-Archive `
-            -Path "D:/a/ro-iteminfo-llm-translator/ro-iteminfo-llm-translator/$env:APP_NAME.exe" `
+            -Path "dist/$env:APP_NAME.exe" `
             -DestinationPath "$env:APP_NAME.zip" `
             -CompressionLevel Optimal
 
