@@ -111,7 +111,7 @@ jobs:
           $env:FORCE_CMAKE = "1"
           $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
-          python -m pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python --no-deps
+          python -m pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu126
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
