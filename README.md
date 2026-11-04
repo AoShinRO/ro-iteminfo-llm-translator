@@ -36,7 +36,7 @@ pip install llama-cpp-python customtkinter
 
 Baixe o [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows) e execute no `cmd`:
 
-```bash
+```bat
 set "VULKAN_SDK=C:/VulkanSDK/1.4.363.0"
 set "CMAKE_ARGS=-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DVulkan_INCLUDE_DIR=%VULKAN_SDK%/Include -DVulkan_LIBRARY=%VULKAN_SDK%/Lib/vulkan-1.lib"
 set "FORCE_CMAKE=1"
@@ -49,7 +49,7 @@ pip install customtkinter
 
 ### GPU NVIDIA (CUDA)
 
-```bash
+```bat
 set "CMAKE_ARGS=-DGGML_CUDA=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_NATIVE=OFF"
 set "FORCE_CMAKE=1"
 pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python
@@ -57,7 +57,7 @@ pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-
 
 ## Uso
 
-```bash
+```bat
 python ro-iteminfo-llm-translator.py
 ```
 
