@@ -166,14 +166,16 @@ jobs:
         run: |
           python -m pip install nuitka
           python -m nuitka `
-            --standalone `
-            --onefile `
-            --enable-plugin=tk-inter `
-            --include-package=customtkinter `
-            --assume-yes-for-downloads `
-            --output-dir=dist `
-            "--output-filename=$env:APP_NAME.exe" `
-            ro-iteminfo-llm-translator.py
+              --standalone `
+              --onefile `
+              --windows-console-mode=disable `
+              --enable-plugin=tk-inter `
+              --include-package=customtkinter `
+              --include-package=typing_extensions `
+              --assume-yes-for-downloads `
+              --output-dir=dist `
+              "--output-filename=$env:APP_NAME.exe" `
+              ro-iteminfo-llm-translator.py
 
           if ($LASTEXITCODE -ne 0) {
             throw "O empacotamento com Nuitka falhou."
