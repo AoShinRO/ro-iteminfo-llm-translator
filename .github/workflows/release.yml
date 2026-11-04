@@ -86,6 +86,7 @@ jobs:
             cuda: "12.6.3"
             method: network
             sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
+            
       - name: Install llama.cpp for CPU AVX
         if: matrix.backend == 'cpu'
         run: |
@@ -110,7 +111,7 @@ jobs:
           $env:FORCE_CMAKE = "1"
           $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
-          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python --no-deps
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
@@ -139,11 +140,18 @@ jobs:
           $env:FORCE_CMAKE = "1"
 
           python -m pip install typing_extensions
-          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python --no-deps
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
           }
-
+          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
+          python -m pip install numpy --no-binary=numpy --force-reinstall `
+            --config-settings="setup-args=-Dcpu-baseline=none" `
+            --config-settings="setup-args=-Dcpu-dispatch=none"
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do NumPy sem AVX falhou."
+          }
+          
       - name: Package windowed one-file app
         shell: pwsh
         env:
