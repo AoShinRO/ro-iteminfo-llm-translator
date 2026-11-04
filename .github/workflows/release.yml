@@ -1,5 +1,7 @@
 name: Build and release desktop app
-
+concurrency:
+    group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 on:
   push:
     branches:
