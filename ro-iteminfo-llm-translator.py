@@ -174,8 +174,6 @@ def limpar_resposta(texto, original):
     texto = re.sub(r"_(COR|TOKEN|QUEBRA)(\d+)", lambda m: f"_{m.group(1).upper()}{m.group(2)}", texto, flags=re.IGNORECASE)
     if texto.endswith(".") and not original.rstrip().endswith("."):
         texto = texto[:-1]
-    if 'Vazio' in texto:
-        return '(null)'
     return texto
 
 
@@ -207,8 +205,14 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
         del cache_traducoes[chave]
 
     if "(null)" in texto:
+        cache_traducoes[chave] = "(null)"
+        salvar_cache()
+        aguardar_retomada()        
         return "(null)"
     if " " == texto:
+        cache_traducoes[chave] = " "
+        salvar_cache()
+        aguardar_retomada()          
         return " "
         
     aguardar_retomada()
