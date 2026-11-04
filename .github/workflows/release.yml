@@ -165,6 +165,7 @@ jobs:
           APP_NAME: RoItemInfoTranslator-${{ matrix.artifact }}
         run: |
           python -m pip install nuitka
+          python -m pip check
           python -m nuitka `
               --standalone `
               --onefile `
