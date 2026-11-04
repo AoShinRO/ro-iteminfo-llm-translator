@@ -268,12 +268,50 @@ def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
         return esquerda + prefixo_lista + texto_limpo + direita
 
     texto_marcado, tags = extrair_preservando_tags(texto_limpo)
+    revisoes_antes = len(para_revisar)
     traducao = traduzir_trecho(
         texto_marcado,
         is_nome_item,
         onde,
-        reforcar_marcadores=reforcar_marcadores,
+        reforcar_marcadores=False,
     )
+
+    marcadores_esperados = RE_MARCADOR.findall(texto_marcado)
+    falha_marcadores = (
+        RE_MARCADOR.findall(traducao) != marcadores_esperados
+        or any(
+            motivo.startswith(
+                "marcadores de estrutura/cor perdidos, alterados ou reordenados"
+            )
+            for _, _, motivo in para_revisar[revisoes_antes:]
+        )
+    )
+
+    # No fallback individual, tenta primeiro com o prompt normal e só reforça
+    # a sequência de marcadores se a validação estrutural da primeira tentativa falhar.
+    if reforcar_marcadores and falha_marcadores:
+        print(f"[RETRY] {onde} — nova tentativa individual com reforço de marcadores.")
+        revisoes_antes_retry = len(para_revisar)
+        traducao_retry = traduzir_trecho(
+            texto_marcado,
+            is_nome_item,
+            f"{onde} (retry)",
+            reforcar_marcadores=True,
+        )
+        retry_ok = (
+            len(para_revisar) == revisoes_antes_retry
+            and RE_MARCADOR.findall(traducao_retry) == marcadores_esperados
+        )
+
+        if retry_ok:
+            # A falha inicial foi recuperada; não deve aparecer no arquivo de revisão.
+            del para_revisar[revisoes_antes:revisoes_antes_retry]
+            traducao = traducao_retry
+            print(f"[RETRY OK] {onde} — linha recuperada e cacheada.")
+        else:
+            # Mantém apenas o registro da tentativa definitiva.
+            del para_revisar[revisoes_antes:revisoes_antes_retry]
+            print(f"[RETRY FALHOU] {onde} — mantendo a linha original.")
 
     if RE_MARCADOR.findall(texto_marcado) != RE_MARCADOR.findall(traducao):
         return texto
