@@ -111,7 +111,7 @@ jobs:
           $env:FORCE_CMAKE = "1"
           $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
-          python -m pip install --force-reinstall --no-cache-dir
+          python -m pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python --no-deps
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
@@ -140,14 +140,12 @@ jobs:
           $env:FORCE_CMAKE = "1"
 
           python -m pip install typing_extensions librosa wheel setuptools
-          python -m pip install --force-reinstall --no-cache-dir --no-build-isolation llama-cpp-python
+          python -m pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
           }
           $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
-          python -m pip install numpy --no-binary=numpy --force-reinstall `
-            --config-settings="setup-args=-Dcpu-baseline=none" `
-            --config-settings="setup-args=-Dcpu-dispatch=none"
+          python -m install numpy --no-binary numpy --force-reinstall --config-settings=setup-args="-Dcpu-baseline=none" --config-settings=setup-args="-Dcpu-dispatch=none"
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do NumPy sem AVX falhou."
           }
