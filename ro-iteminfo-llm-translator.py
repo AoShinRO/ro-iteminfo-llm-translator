@@ -833,7 +833,7 @@ class TradutorGUI(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-        self.title("Tradutor ItemInfo LLM(Local) by AoShinHo)")
+        self.title("Tradutor ItemInfo LLM(Local) by AoShinHo")
         self.geometry("810x603")
         self.minsize(810, 603)
         self.configure(fg_color=self.BG)
@@ -843,35 +843,11 @@ class TradutorGUI(ctk.CTk):
         self.arquivo_modelo = preferencias.get("modelo_gguf", "")
         self.executando = False
         self.pausado = False
-        self._drag = (0, 0)
         self.overrideredirect(False)
         self._montar_interface()
         self.after(100, self._processar_fila)
 
     def _montar_interface(self):
-        # Barra superior personalizada
-        '''
-        topo = ctk.CTkFrame(self, fg_color=self.PANEL, corner_radius=0, height=48)
-        topo.pack(fill="x")
-        topo.pack_propagate(False)
-
-        titulo = ctk.CTkLabel(topo, text="Tradutor ItemInfo LLM(Local) by AoShinHo)", font=ctk.CTkFont(size=15, weight="bold"), text_color="#f2f4f8")
-        titulo.pack(side="left", padx=20)
-        titulo.bind("<Button-1>", self._iniciar_arrasto)
-        titulo.bind("<B1-Motion>", self._arrastar)
-        topo.bind("<Button-1>", self._iniciar_arrasto)
-        topo.bind("<B1-Motion>", self._arrastar)
-
-        controles = ctk.CTkFrame(topo, fg_color="transparent")
-        controles.pack(side="right", padx=8)
-
-        ctk.CTkButton(controles, text="—", width=34, height=30, corner_radius=8,
-                      fg_color="transparent", hover_color="#343a46",
-                      command=self.iconify).pack(side="left", padx=2)
-        ctk.CTkButton(controles, text="✕", width=34, height=30, corner_radius=8,
-                      fg_color="transparent", hover_color="#a83242",
-                      command=self.destroy).pack(side="left", padx=2)
-        '''
         corpo = ctk.CTkFrame(self, fg_color="transparent")
         corpo.pack(fill="both", expand=True, padx=18, pady=(27, 18))
 
@@ -1056,12 +1032,6 @@ class TradutorGUI(ctk.CTk):
         except queue.Empty:
             pass
         self.after(100, self._processar_fila)
-
-    def _iniciar_arrasto(self, event):
-        self._drag = (event.x_root - self.winfo_x(), event.y_root - self.winfo_y())
-
-    def _arrastar(self, event):
-        self.geometry(f"+{event.x_root - self._drag[0]}+{event.y_root - self._drag[1]}")
 
 if __name__ == "__main__":
     app = TradutorGUI()
