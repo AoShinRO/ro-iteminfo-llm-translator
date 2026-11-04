@@ -2,10 +2,9 @@ name: Build and release desktop app
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch: 
-
+    branches:
+      - main
+  workflow_dispatch:
 permissions:
   contents: write
 
@@ -34,7 +33,7 @@ jobs:
           python-version: "3.10"
           architecture: x64
 
-      - name: Install packaging tools
+      - name: Install build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install pyinstaller customtkinter cmake ninja
@@ -47,15 +46,29 @@ jobs:
           Invoke-WebRequest `
             -Uri "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe" `
             -OutFile $installer
+
           & $installer --accept-licenses --default-answer --confirm-command install
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            throw "A instalação do Vulkan SDK falhou."
+          }
 
           $sdk = Get-ChildItem "C:\VulkanSDK" -Directory |
             Sort-Object Name -Descending |
             Select-Object -First 1
 
           if (-not $sdk) {
-            throw "Vulkan SDK installation directory was not found."
+            throw "Vulkan SDK não foi encontrado em C:\VulkanSDK."
+          }
+
+          $sdkPath = $sdk.FullName.Replace('\', '/')
+          $includePath = "$sdkPath/Include"
+          $libraryPath = "$sdkPath/Lib/vulkan-1.lib"
+
+          if (-not (Test-Path "$includePath/vulkan/vulkan.h")) {
+            throw "Header do Vulkan não encontrado em $includePath."
+          }
+          if (-not (Test-Path $libraryPath)) {
+            throw "Biblioteca Vulkan não encontrada em $libraryPath."
           }
 
           "VULKAN_SDK=$($sdk.FullName)" |
@@ -69,33 +82,65 @@ jobs:
         with:
           cuda: "12.6.3"
           method: network
-          sub-packages: '["nvcc", "cudart"]'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
 
       - name: Install llama.cpp for CPU AVX
         if: matrix.backend == 'cpu'
-        run: python -m pip install llama-cpp-python
+        run: |
+          python -m pip install llama-cpp-python
 
       - name: Build llama.cpp with Vulkan
         if: matrix.backend == 'vulkan'
         shell: pwsh
         run: |
-          $env:CMAKE_ARGS = "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DVulkan_INCLUDE_DIR=$env:VULKAN_SDK\Include -DVulkan_LIBRARY=$env:VULKAN_SDK\Lib\vulkan-1.lib"
+          $sdk = Get-ChildItem "C:\VulkanSDK" -Directory |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $sdk) {
+            throw "Vulkan SDK não foi encontrado."
+          }
+
+          $sdkPath = $sdk.FullName.Replace('\', '/')
+          $includePath = "$sdkPath/Include"
+          $libraryPath = "$sdkPath/Lib/vulkan-1.lib"
+
+          $env:CMAKE_ARGS = "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DVulkan_INCLUDE_DIR:PATH=$includePath -DVulkan_LIBRARY:FILEPATH=$libraryPath"
           $env:FORCE_CMAKE = "1"
-          python -m pip install --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install numpy
+          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
+
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do llama-cpp-python com Vulkan falhou."
+          }
+
+          python -m pip install numpy --no-binary=numpy --force-reinstall `
+            --config-settings="setup-args=-Dcpu-baseline=none" `
+            --config-settings="setup-args=-Dcpu-dispatch=none"
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do NumPy sem AVX falhou."
+          }
 
       - name: Build llama.cpp with CUDA
         if: matrix.backend == 'cuda'
         shell: pwsh
         run: |
-          $env:CMAKE_ARGS = "-DGGML_CUDA=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF"
+          $env:CMAKE_ARGS = "-DGGML_CUDA=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_NATIVE=OFF"
           $env:FORCE_CMAKE = "1"
-          python -m pip install --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m pip install numpy
+          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
-      - name: Package windowed GUI app
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do llama-cpp-python com CUDA falhou."
+          }
+
+          python -m pip install numpy --no-binary=numpy --force-reinstall `
+            --config-settings="setup-args=-Dcpu-baseline=none" `
+            --config-settings="setup-args=-Dcpu-dispatch=none"
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do NumPy sem AVX falhou."
+          }
+
+      - name: Package windowed one-file app
         shell: pwsh
         env:
           APP_NAME: RoItemInfoTranslator-${{ matrix.artifact }}
@@ -103,16 +148,18 @@ jobs:
           python -m PyInstaller `
             --noconfirm `
             --clean `
+            --onefile `
             --windowed `
-            --onedir `
             --name "$env:APP_NAME" `
             --collect-all customtkinter `
             --collect-all llama_cpp `
             ro-iteminfo-llm-translator.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            throw "O empacotamento com PyInstaller falhou."
+          }
 
           Compress-Archive `
-            -Path "dist/$env:APP_NAME" `
+            -Path "dist/$env:APP_NAME.exe" `
             -DestinationPath "$env:APP_NAME.zip" `
             -CompressionLevel Optimal
 
@@ -135,9 +182,13 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Create release and upload packages
+      - name: Create pre-release and upload builds
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: main-build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Build ${{ github.run_number }}
+          prerelease: true
           generate_release_notes: true
           files: release-assets/*.zip
           fail_on_unmatched_files: true
