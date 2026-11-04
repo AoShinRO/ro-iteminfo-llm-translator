@@ -76,14 +76,14 @@ jobs:
           "$($sdk.FullName)\Bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+
       - name: Set up CUDA toolkit
         if: matrix.backend == 'cuda'
         uses: Jimver/cuda-toolkit@v0.2.24
         with:
-          cuda: "12.6.3"
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
-
+            cuda: "12.6.3"
+            method: network
+            sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
       - name: Install llama.cpp for CPU AVX
         if: matrix.backend == 'cpu'
         run: |
@@ -124,21 +124,22 @@ jobs:
         if: matrix.backend == 'cuda'
         shell: pwsh
         run: |
-          $env:CUDACXX = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\nvcc.exe"
+          $cudaRoot = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6"
+          $env:CUDA_PATH = $cudaRoot
+          $env:CUDA_PATH_V12_6 = $cudaRoot
+          $env:PATH += ";$cudaRoot\bin;$cudaRoot\libnvvp"
+          $env:CUDACXX = "$cudaRoot\bin\nvcc.exe"
+
+          # Ativa toolchain do Visual Studio
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+
           $env:CMAKE_ARGS = "-DGGML_CUDA=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF"
           $env:FORCE_CMAKE = "1"
+
           python -m pip install typing_extensions
           python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
-      
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
-          }
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
-          python -m pip install numpy --force-reinstall `
-            --config-settings="setup-args=-Dcpu-baseline=none" `
-            --config-settings="setup-args=-Dcpu-dispatch=none"
-          if ($LASTEXITCODE -ne 0) {
-            throw "A compilação do NumPy sem AVX falhou."
           }
 
       - name: Package windowed one-file app
