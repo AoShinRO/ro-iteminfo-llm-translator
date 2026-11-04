@@ -661,6 +661,21 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         estado = {}
     concluidos = set(estado.get("itens_concluidos", [])) & set(ids_itens)
 
+    # Corrige estados antigos que marcaram como concluído um item mesmo com
+    # falhas definitivas: o relatório de revisão tem precedência sobre o progresso.
+    if os.path.isfile(CAMINHO_REVISAR):
+        try:
+            with open(CAMINHO_REVISAR, "r", encoding="utf-8") as f:
+                for registro in f:
+                    falha = re.match(r"ID (\\d+)\\b", registro)
+                    if falha:
+                        item_com_falha = falha.group(1)
+                        if item_com_falha in concluidos:
+                            concluidos.discard(item_com_falha)
+                            print(f"[RECUPERAÇÃO] ID {item_com_falha} removido dos concluídos por possuir falha registrada.")
+        except Exception as erro_revisao:
+            print(f"[AVISO] Não foi possível consultar falhas anteriores: {erro_revisao}")
+
     # Migração única: só infere progresso pelo arquivo de saída quando ainda não
     # existe um estado válido. Depois disso, o JSON é a fonte da verdade.
     linhas_saida_existente = None
