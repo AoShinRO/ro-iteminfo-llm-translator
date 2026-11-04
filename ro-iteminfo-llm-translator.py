@@ -28,6 +28,8 @@ import json
 import sys
 import threading
 import queue
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 try:
     import customtkinter as ctk
