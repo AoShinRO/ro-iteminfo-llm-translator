@@ -132,7 +132,7 @@ def aguardar_retomada():
     if evento_stop.is_set():
         raise InterruptedError("Tradução encerrada.")
 
-def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
+def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
     # --- PROMPTS ---
     instrucao_system = (
         "Traduza do inglês para português brasileiro. "
@@ -140,13 +140,15 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
         "Não explique, não comente, não remova ou tente traduzir palavras que você não conhece e não repita instruções."
     )
     if reforcar_marcadores:
-        marcadores_esperados = [
-            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)
-        ]
+        marcadores_esperados = (
+            marcadores_forcados
+            if marcadores_forcados is not None
+            else [f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)]
+        )
         if marcadores_esperados:
             sequencia_marcadores = " ".join(marcadores_esperados)
             instrucao_system += (
-                "REGRA: Preserve a sequência de TOODOS OS MARCADORES exatamente como escrito no texto."
+                "REGRA: Preserve a sequência de TODOS OS MARCADORES exatamente como escrito no texto."
                 f"{sequencia_marcadores}."
             )
 
@@ -187,7 +189,7 @@ def motivo_recusa(original, traducao):
         return "código de cor inventado"
     return None
 
-def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
+def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcadores_forcados=None):
     """
     Traduz e armazena o par mensagem/resposta exatamente como enviado à LLM.
     Se o texto contiver placeholders semânticos (_COR1, _TOKEN1...), ambos permanecem no cache.
@@ -213,7 +215,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False):
 
     try:
         response = llm.create_chat_completion(
-            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores),
+            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
             temperature=0.0,
             max_tokens=min(3072, len(texto) * 64),
         )
@@ -290,13 +292,22 @@ def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
     # No fallback individual, tenta primeiro com o prompt normal e só reforça
     # a sequência de marcadores se a validação estrutural da primeira tentativa falhar.
     if reforcar_marcadores and falha_marcadores:
-        print(f"[RETRY] {onde} — nova tentativa individual com reforço de marcadores.")
+        sequencia_marcadores_linha = " ".join(
+            f"_{tipo}{indice}" for tipo, indice in marcadores_esperados
+        )
+        print(
+            f"[RETRY] {onde} — nova tentativa individual; "
+            f"marcadores da linha: {sequencia_marcadores_linha}"
+        )
         revisoes_antes_retry = len(para_revisar)
         traducao_retry = traduzir_trecho(
             texto_marcado,
             is_nome_item,
             f"{onde} (retry)",
             reforcar_marcadores=True,
+            marcadores_forcados=[
+                f"_{tipo}{indice}" for tipo, indice in marcadores_esperados
+            ],
         )
         retry_ok = (
             len(para_revisar) == revisoes_antes_retry
