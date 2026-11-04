@@ -108,13 +108,12 @@ jobs:
 
           $env:CMAKE_ARGS = "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DVulkan_INCLUDE_DIR:PATH=$includePath -DVulkan_LIBRARY:FILEPATH=$libraryPath"
           $env:FORCE_CMAKE = "1"
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
           python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
-
+          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
           python -m pip install numpy --no-binary=numpy --force-reinstall `
             --config-settings="setup-args=-Dcpu-baseline=none" `
             --config-settings="setup-args=-Dcpu-dispatch=none"
@@ -153,7 +152,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
           }
-          
+          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"          
+          python -m pip install numpy --no-binary=numpy --force-reinstall `
+            --config-settings="setup-args=-Dcpu-baseline=none" `
+            --config-settings="setup-args=-Dcpu-dispatch=none"
+          if ($LASTEXITCODE -ne 0) {
+            throw "A compilação do NumPy sem AVX falhou."
+          }
       - name: Package windowed one-file app
         shell: pwsh
         env:
