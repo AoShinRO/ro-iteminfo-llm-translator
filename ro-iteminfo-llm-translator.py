@@ -135,10 +135,11 @@ def aguardar_retomada():
 def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
     # --- PROMPTS ---
     instrucao_system = (
-        "Traduza do inglês para português brasileiro. "
-        "Responda somente com a tradução. "
-        "Não explique, não comente, não remova ou tente traduzir palavras que você não conhece e não repita instruções."
+        "TAREFA: Traduzir estritamente do Inglês para o Português (Brasil). "
+        "PROIBIDO: Adicionar explicações, notas, saudações ou repetir regras. Manter o texto puro. "
+        "ÂNCORA SINTÁTICA: Palavras iniciadas com sublinhado (Ex: _TOKEN1, _COR1) são variáveis físicas de hardware invariáveis."
     )
+    
     if reforcar_marcadores:
         marcadores_esperados = (
             marcadores_forcados
@@ -146,10 +147,11 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
             else [f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)]
         )
         if marcadores_esperados:
-            sequencia_marcadores = " ".join(marcadores_esperados)
+            sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao_system += (
-                "REGRA: Preserve a sequência de TODOS OS MARCADORES exatamente como escrito no texto."
-                f"{sequencia_marcadores}."
+                f"LINTER ATIVO: A saída OBRIGATORIAMENTE deve conter a sequência exata de controle: [{sequencia_marcadores}]. "
+                "Se omitir ou alterar a ordem de um único marcador, a compilação quebrará. "
+                "Trate-os como constantes de código."
             )
 
     return [
