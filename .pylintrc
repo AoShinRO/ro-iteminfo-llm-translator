@@ -1,0 +1,10 @@
+[MASTER]
+ignore=CVS,.git
+
+[MESSAGES CONTROL]
+# Ignore convention, refactor, and warning messages for this legacy single-file app.
+# Keep fatal and error checks enabled, except the optional llama_cpp dependency.
+disable=C,R,W,E0401
+
+[FORMAT]
+max-line-length=140
