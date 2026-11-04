@@ -78,7 +78,6 @@ jobs:
           "$($sdk.FullName)\Bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-
       - name: Set up CUDA toolkit
         if: matrix.backend == 'cuda'
         uses: Jimver/cuda-toolkit@v0.2.24
@@ -111,11 +110,11 @@ jobs:
           $env:FORCE_CMAKE = "1"
           $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
 
-          python -m pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu126
+          python -m pip install --force-reinstall --no-cache-dir --no-binary=llama-cpp-python --no-deps llama-cpp-python
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
+
           python -m pip install numpy --no-binary=numpy --force-reinstall `
             --config-settings="setup-args=-Dcpu-baseline=none" `
             --config-settings="setup-args=-Dcpu-dispatch=none"
