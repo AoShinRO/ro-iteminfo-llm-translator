@@ -4,6 +4,9 @@ concurrency:
     cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 on: [push]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
