@@ -49,7 +49,7 @@ pip install customtkinter
 
 ### GPU NVIDIA (CUDA)
 
-```bat
+```bash
 set "CMAKE_ARGS=-DGGML_CUDA=ON -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_NATIVE=OFF"
 set "FORCE_CMAKE=1"
 pip install llama-cpp-python --force-reinstall --no-cache-dir --no-binary llama-cpp-python
