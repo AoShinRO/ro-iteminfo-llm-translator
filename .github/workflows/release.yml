@@ -172,6 +172,7 @@ jobs:
               --enable-plugin=tk-inter `
               --include-package=customtkinter `
               --include-package=typing_extensions `
+              --include-package=diskcache `
               --assume-yes-for-downloads `
               --output-dir=dist `
               "--output-filename=$env:APP_NAME.exe" `
