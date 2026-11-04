@@ -146,15 +146,8 @@ jobs:
         env:
           APP_NAME: RoItemInfoTranslator-${{ matrix.artifact }}
         run: |
-          python -m PyInstaller `
-            --noconfirm `
-            --clean `
-            --onefile `
-            --windowed `
-            --name "$env:APP_NAME" `
-            --collect-all customtkinter `
-            --collect-all llama_cpp `
-            ro-iteminfo-llm-translator.py
+          python -m pip install nuitka
+          python -m nuitka --standalone --onefile --plugin-enable=tk-inter --include-package=customtkinter ro-iteminfo-llm-translator.py
           if ($LASTEXITCODE -ne 0) {
             throw "O empacotamento com PyInstaller falhou."
           }
