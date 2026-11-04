@@ -880,7 +880,7 @@ class TradutorGUI(ctk.CTk):
         )
         self.start_button.pack(side="right", anchor="s")
 
-        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#4a90b8", corner_radius=18, height=54)
+        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#6E849A", corner_radius=18, height=54)
         self.progress_outer.pack(fill="x")
         self.progress_outer.pack_propagate(False)
         self.progress_fill = ctk.CTkFrame(self.progress_outer, fg_color=self.GREEN,
