@@ -28,7 +28,9 @@ Tradutor offline do `ItemInfo.lua` do Ragnarok Online (inglês → português br
 pip install llama-cpp-python customtkinter
 ```
 
-### GPU AMD (Vulkan) — processadores sem AVX
+## Rodando o Modelo na Placa de Vídeo — processadores sem AVX
+
+### GPU AMD (Vulkan)
 
 Baixe o [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows) e execute no `cmd`:
 
