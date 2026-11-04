@@ -649,44 +649,53 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         if n and ids_itens:
             nomes_originais[ids_itens[-1]] = n.group(2)
 
+    estado_valido = False
     try:
         with open(CAMINHO_ESTADO, "r", encoding="utf-8") as f:
             estado = json.load(f)
-        if estado.get("arquivo_entrada") != os.path.abspath(CAMINHO_ENTRADA):
+        if estado.get("arquivo_entrada") == os.path.abspath(CAMINHO_ENTRADA):
+            estado_valido = True
+        else:
             estado = {}
     except Exception:
         estado = {}
     concluidos = set(estado.get("itens_concluidos", [])) & set(ids_itens)
 
-    # Recupera também traduções feitas pela versão antiga do console, que não possuía
-    # arquivo de progresso. Um bloco alterado no arquivo de saída é considerado concluído.
+    # Migração única: só infere progresso pelo arquivo de saída quando ainda não
+    # existe um estado válido. Depois disso, o JSON é a fonte da verdade.
+    linhas_saida_existente = None
     if os.path.isfile(CAMINHO_SAIDA):
         try:
             with open(CAMINHO_SAIDA, "r", encoding=ENCODING_ARQUIVO) as f:
-                linhas_saida = f.read().split("\n")
-            blocos_entrada = {}
-            blocos_saida = {}
-            def separar_blocos(linhas_fonte, destino):
-                id_bloco = None
-                buffer = []
-                for linha_fonte in linhas_fonte:
-                    match = re.match(r"^\s*\[(\d+)\]\s*=\s*\{", linha_fonte)
-                    if match:
-                        if id_bloco is not None:
-                            destino[id_bloco] = buffer
-                        id_bloco = match.group(1)
-                        buffer = [linha_fonte]
-                    elif id_bloco is not None:
-                        buffer.append(linha_fonte)
-                if id_bloco is not None:
-                    destino[id_bloco] = buffer
-            separar_blocos(linhas, blocos_entrada)
-            separar_blocos(linhas_saida, blocos_saida)
-            for item_id in ids_itens:
-                if item_id in blocos_saida and item_id in blocos_entrada:
-                    if blocos_saida[item_id] != blocos_entrada[item_id]:
-                        concluidos.add(item_id)
+                linhas_saida_existente = f.read().split("\\n")
+            if linhas_saida_existente and linhas_saida_existente[-1] == "":
+                linhas_saida_existente.pop()
+            if not estado_valido:
+                blocos_entrada = {}
+                blocos_saida = {}
+                def separar_blocos(linhas_fonte, destino):
+                    id_bloco = None
+                    buffer = []
+                    for linha_fonte in linhas_fonte:
+                        match = re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linha_fonte)
+                        if match:
+                            if id_bloco is not None:
+                                destino[id_bloco] = buffer
+                            id_bloco = match.group(1)
+                            buffer = [linha_fonte]
+                        elif id_bloco is not None:
+                            buffer.append(linha_fonte)
+                    if id_bloco is not None:
+                        destino[id_bloco] = buffer
+                separar_blocos(linhas, blocos_entrada)
+                separar_blocos(linhas_saida_existente, blocos_saida)
+                for item_id in ids_itens:
+                    if item_id in blocos_saida and item_id in blocos_entrada:
+                        if blocos_saida[item_id] != blocos_entrada[item_id]:
+                            concluidos.add(item_id)
+                print("[INFO] Progresso legado recuperado do arquivo de saída.")
         except Exception as erro_estado:
+            linhas_saida_existente = None
             print(f"[AVISO] Não foi possível recuperar progresso do arquivo de saída: {erro_estado}")
 
     def salvar_estado():
@@ -702,10 +711,17 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         fila.put(("progresso", len(concluidos), len(ids_itens), item_id, nome))
 
     def concluir_item(item_id):
-        if item_id is not None and item_id not in concluidos:
+        if item_id is None:
+            return
+        prefixo_falha = f"ID {item_id} "
+        falhou = any(onde.startswith(prefixo_falha) for onde, _, _ in para_revisar)
+        if falhou:
+            concluidos.discard(item_id)
+            print(f"[PENDENTE] ID {item_id} — possui falha(s) definitiva(s); será reprocessado na próxima execução.")
+        elif item_id not in concluidos:
             concluidos.add(item_id)
-            salvar_estado()
-        fila.put(("progresso", len(concluidos), len(ids_itens), item_id or "", "Item concluído"))
+        salvar_estado()
+        fila.put(("progresso", len(concluidos), len(ids_itens), item_id, "Item concluído" if not falhou else "Item pendente para revisão"))
 
     # Se a execução foi pausada, aguarda aqui antes de carregar o modelo.
     aguardar_retomada()
@@ -736,6 +752,26 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
 
     print("Processando e traduzindo ItemInfo estruturado (Modo Offline LLM)...")
 
+    # Reaproveita os blocos já concluídos no arquivo de saída. Como o tradutor
+    # preserva a estrutura/quantidade de linhas, a substituição é segura quando
+    # os dois arquivos têm a mesma quantidade de linhas.
+    if linhas_saida_existente is not None and len(linhas_saida_existente) == len(linhas):
+        inicio_bloco = None
+        id_bloco = None
+        for pos, linha_fonte in enumerate(linhas + [""]):
+            match = re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linha_fonte) if pos < len(linhas) else None
+            if match or pos == len(linhas):
+                if id_bloco in concluidos and inicio_bloco is not None:
+                    linhas[inicio_bloco:pos] = linhas_saida_existente[inicio_bloco:pos]
+                if match:
+                    id_bloco = match.group(1)
+                    inicio_bloco = pos
+                else:
+                    id_bloco = None
+                    inicio_bloco = None
+    elif concluidos:
+        print("[AVISO] Saída anterior tem estrutura/quantidade de linhas diferente; não foi possível reaproveitar blocos concluídos.")
+
     mapeamento_nomes = {}  
     item_atual_id = None
     substituicoes_linha = {} 
@@ -752,6 +788,15 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
             aguardar_retomada()
             if item_atual_id is not None:
                 concluir_item(item_atual_id)
+            item_atual_id = None
+            if novo_id in concluidos:
+                # O bloco já está traduzido e foi preservado da saída anterior.
+                # Salta diretamente para o próximo ID, sem analisar/traduzir suas linhas.
+                proximo = indice + 1
+                while proximo < len(linhas) and not re.match(r"^\\s*\\[(\\d+)\\]\\s*=\\s*\\{", linhas[proximo]):
+                    proximo += 1
+                indice = proximo
+                continue
             item_atual_id = novo_id
             notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
        
