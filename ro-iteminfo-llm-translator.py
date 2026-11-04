@@ -880,14 +880,14 @@ class TradutorGUI(ctk.CTk):
         )
         self.start_button.pack(side="right", anchor="s")
 
-        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#d94b4b", corner_radius=18, height=54)
+        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#4a90b8", corner_radius=18, height=54)
         self.progress_outer.pack(fill="x")
         self.progress_outer.pack_propagate(False)
         self.progress_fill = ctk.CTkFrame(self.progress_outer, fg_color=self.GREEN,
                                           corner_radius=18, width=1, height=54)
         self.progress_fill.place(x=0, y=0, relheight=1, relwidth=0)
         self.progress_text = ctk.CTkLabel(self.progress_outer, text="0%", corner_radius=9, fg_color="transparent",
-                                           font=ctk.CTkFont(size=18, weight="bold"),
+                                           font=ctk.CTkFont(size=27, weight="bold"),
                                            text_color="black")
         self.progress_text.place(relx=0.5, rely=0.5, anchor="center")
         self.item_text = ctk.CTkLabel(corpo, text="Aguardando seleção...", fg_color="transparent",
