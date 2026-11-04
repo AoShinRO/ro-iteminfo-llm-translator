@@ -146,7 +146,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False):
         if marcadores_esperados:
             sequencia_marcadores = " ".join(marcadores_esperados)
             instrucao_system += (
-                "REGRA: Preserve a sequência de cada marcador exatamente como escrito no texto."
+                "REGRA: Preserve a sequência de TOODOS OS MARCADORES exatamente como escrito no texto."
                 f"{sequencia_marcadores}."
             )
 
@@ -671,7 +671,6 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         n_gpu_layers=-1,
         verbose=False
     )
-    print("Processando e traduzindo ItemInfo estruturado (Modo Offline LLM)...")
 
     if not os.path.exists(CAMINHO_ENTRADA):
         print(f"Erro: O arquivo '{CAMINHO_ENTRADA}' não foi encontrado.")
@@ -706,7 +705,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 concluir_item(item_atual_id)
             item_atual_id = novo_id
             notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
-
+       
         # 1. Aplica o texto padrão da Lupa
         match_unid_desc = RE_UNID_DESC.match(linha)
         if match_unid_desc:
@@ -835,8 +834,8 @@ class TradutorGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Tradutor ItemInfo LLM(Local) by AoShinHo)")
-        self.geometry("780x630")
-        self.minsize(680, 400)
+        self.geometry("810x603")
+        self.minsize(810, 603)
         self.configure(fg_color=self.BG)
         self.fila = queue.Queue()
         preferencias = carregar_preferencias_gui()
@@ -905,13 +904,13 @@ class TradutorGUI(ctk.CTk):
         )
         self.start_button.pack(side="right", anchor="s")
 
-        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#d94b4b", corner_radius=12, height=54)
+        self.progress_outer = ctk.CTkFrame(corpo, fg_color="#d94b4b", corner_radius=18, height=54)
         self.progress_outer.pack(fill="x")
         self.progress_outer.pack_propagate(False)
         self.progress_fill = ctk.CTkFrame(self.progress_outer, fg_color=self.GREEN,
-                                          corner_radius=12, width=1, height=54)
+                                          corner_radius=18, width=1, height=54)
         self.progress_fill.place(x=0, y=0, relheight=1, relwidth=0)
-        self.progress_text = ctk.CTkLabel(self.progress_outer, text="0%", fg_color="transparent",
+        self.progress_text = ctk.CTkLabel(self.progress_outer, text="0%", corner_radius=9, fg_color="transparent",
                                            font=ctk.CTkFont(size=18, weight="bold"),
                                            text_color="black")
         self.progress_text.place(relx=0.5, rely=0.5, anchor="center")
