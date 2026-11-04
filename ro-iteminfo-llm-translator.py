@@ -135,9 +135,10 @@ def aguardar_retomada():
 def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
     # --- PROMPTS ---
     instrucao_system = (
-        "TAREFA: Traduzir estritamente do Inglês para o Português (Brasil). "
-        "PROIBIDO: Adicionar explicações, notas, saudações ou repetir regras. Manter o texto puro. "
-        "ÂNCORA SINTÁTICA: Palavras iniciadas com sublinhado (Ex: _TOKEN1, _COR1) são variáveis físicas de hardware invariáveis."
+        "[SISTEMA: MODO COMPRESSÃO - RESTRIÇÃO GEOMÉTRICA CRÍTICA]\n"
+        "TAREFA: Traduzir estritamente do Inglês para o Português (Brasil).\n"
+        "PROIBIDO: Adicionar explicações, notas, saudações ou repetir regras. Manter o texto puro.\n"
+        "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
     )
     
     if reforcar_marcadores:
@@ -149,8 +150,8 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao_system += (
-                f"LINTER ATIVO: A saída OBRIGATORIAMENTE deve conter a sequência exata de controle: [{sequencia_marcadores}]. "
-                "Se omitir ou alterar a ordem de um único marcador, a compilação quebrará. "
+                f"LINTER ATIVO: A saída OBRIGATORIAMENTE deve conter a sequência exata de controle: [{sequencia_marcadores}]. \n"
+                "Se omitir ou alterar a ordem de um único marcador, a compilação quebrará. \n"
                 "Trate-os como constantes de código."
             )
 
@@ -851,7 +852,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 nomes_originais[item_atual_id] = nome_original
                 notificar(item_atual_id, nome_original)
                 print(f"ID {item_atual_id}: Traduzindo -> {nome_original}")
-                nome_traduzido = traduzir_linha(nome_original, True, f"ID {item_atual_id} nome")
+                nome_traduzido = traduzir_linha(nome_original, False, f"ID {item_atual_id} nome")
                 mapeamento_nomes[item_atual_id] = nome_traduzido
                 substituicoes_linha[indice] = {"tipo": "nome_item", "texto": nome_traduzido, "prefixo": prefixo, "sufixo": sufixo}
             indice += 1
