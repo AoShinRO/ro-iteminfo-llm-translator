@@ -81,7 +81,7 @@ As últimas seleções de arquivo/modelo ficam salvas em `.tradutor_iteminfo_ult
 - O arquivo é lido/escrito em `latin-1` para preservar byte a byte os nomes de sprite coreanos misturados com texto cp1252 — não use detector de encoding
 - Códigos de cor, escapes e separadores são substituídos por marcadores (`_COR1`, `_TOKEN1`, `_QUEBRA1`) antes de ir à LLM e restaurados depois; respostas que perdem/reordenam marcadores são rejeitadas com retry e fallback linha a linha
 - `TRADUZIR_NOMES = True` no topo do script controla se os nomes dos itens são traduzidos (modelos pequenos podem se sair melhor com `False`)
-- Modelo carregado com `n_ctx=3072`, `n_threads=6`, `n_gpu_layers=-1` (todas as camadas na GPU quando disponível)
+- Modelo carregado com `n_ctx=3072`, `n_threads=max-1`, `n_gpu_layers=-1` (todas as camadas na GPU quando disponível)
 
 ## Licença
 
