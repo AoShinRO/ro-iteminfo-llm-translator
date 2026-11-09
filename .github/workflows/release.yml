@@ -169,7 +169,7 @@ jobs:
           python -m nuitka `
               --standalone `
               --onefile `
-              --windows-console-mode=enabled `
+              --windows-console-mode=force `
               --enable-plugin=tk-inter `
               --include-package=customtkinter `
               --include-package=typing_extensions `
