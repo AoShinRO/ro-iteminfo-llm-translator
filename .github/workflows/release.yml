@@ -27,10 +27,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           architecture: x64
@@ -160,7 +160,7 @@ jobs:
           python -m nuitka `
               --standalone `
               --onefile `
-              --windows-console-mode=force `
+              --windows-console-mode=disable `
               --enable-plugin=tk-inter `
               --include-package=customtkinter `
               --include-package=typing_extensions `
@@ -185,7 +185,7 @@ jobs:
             -CompressionLevel Optimal
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: RoItemInfoTranslator-${{ matrix.artifact }}.zip
@@ -198,7 +198,7 @@ jobs:
     needs: build
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-assets
           merge-multiple: true
