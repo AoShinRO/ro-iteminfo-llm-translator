@@ -113,13 +113,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com Vulkan falhou."
           }
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"
-          python -m pip install numpy --no-binary=numpy --force-reinstall `
-            --config-settings="setup-args=-Dcpu-baseline=none" `
-            --config-settings="setup-args=-Dcpu-dispatch=none"
-          if ($LASTEXITCODE -ne 0) {
-            throw "A compilação do NumPy sem AVX falhou."
-          }
+          python -m pip install --only-binary=numpy numpy
+          python -c "import numpy; print(numpy.__version__, numpy.__file__); print(numpy.finfo(numpy.float64))"
           
       - name: Set up MSVC environment
         if: matrix.backend == 'cuda'
@@ -152,13 +147,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "A compilação do llama-cpp-python com CUDA falhou."
           }
-          $env:NPY_DISABLE_CPU_FEATURES = "AVX,AVX2,FMA3,AVX512F"          
-          python -m pip install numpy --no-binary=numpy --force-reinstall `
-            --config-settings="setup-args=-Dcpu-baseline=none" `
-            --config-settings="setup-args=-Dcpu-dispatch=none"
-          if ($LASTEXITCODE -ne 0) {
-            throw "A compilação do NumPy sem AVX falhou."
-          }
+          python -m pip install --only-binary=numpy numpy
+          python -c "import numpy; print(numpy.__version__, numpy.__file__); print(numpy.finfo(numpy.float64))"
+          
       - name: Package windowed one-file app
         shell: pwsh
         env:
