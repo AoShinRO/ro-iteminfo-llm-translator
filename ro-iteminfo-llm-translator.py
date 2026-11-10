@@ -55,8 +55,13 @@ evento_pausa = threading.Event()
 evento_pausa.set()
 
 # --- ÚLTIMAS SELEÇÕES DA GUI ---
+if "__compiled__" in globals():  # Executável Nuitka
+    DIRETORIO_APLICACAO = os.path.dirname(os.path.abspath(sys.argv[0]))
+else:  # Execução normal do script
+    DIRETORIO_APLICACAO = os.path.dirname(os.path.abspath(__file__))
+
 CAMINHO_PREFERENCIAS = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), ".tradutor_iteminfo_ultima_selecao.json"
+    DIRETORIO_APLICACAO, ".tradutor_iteminfo_ultima_selecao.json"
 )
 
 def carregar_preferencias_gui():
