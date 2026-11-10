@@ -38,7 +38,7 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install pyinstaller customtkinter cmake ninja typing_extensions diskcache jinja2
+          python -m pip install pyinstaller customtkinter psutil cmake ninja typing_extensions diskcache jinja2
 
       - name: Install Vulkan SDK
         if: matrix.backend == 'vulkan'
