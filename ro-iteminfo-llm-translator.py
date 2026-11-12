@@ -641,7 +641,7 @@ def indexar_iteminfo_bro(caminho):
     validos = {
         item_id: dados
         for item_id, dados in itens.items()
-        if dados["display_line"] is not None and dados["description_lines"] is not None
+        if dados["description_lines"] is not None
     }
     return validos
 
@@ -958,7 +958,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
             metricas_eta["inicio_item"] = time.monotonic()
             if novo_id in itens_bro:
                 itens_bro_aproveitados.add(novo_id)
-                print(f"[bRO] ID {novo_id}: reutilizando nome e descrição traduzidos.")
+                print(f"[bRO] ID {novo_id}: reutilizando descrição traduzida (e nome quando disponível).")
                 notificar(item_atual_id, "Reaproveitando tradução do bRO")
             else:
                 notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
@@ -990,7 +990,11 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
         if match_id_disp:
             prefixo, nome_original, sufixo = match_id_disp.groups()
             dados_bro = itens_bro.get(item_atual_id)
-            if dados_bro and item_atual_id in itens_bro_aproveitados:
+            if (
+                dados_bro
+                and item_atual_id in itens_bro_aproveitados
+                and dados_bro["display_line"] is not None
+            ):
                 nome_bro = RE_ID_DISPLAY.match(dados_bro["display_line"]).group(2)
                 mapeamento_nomes[item_atual_id] = nome_bro
                 substituicoes_linha[indice] = {"tipo": "linha_bro", "linha": dados_bro["display_line"]}
