@@ -149,8 +149,14 @@ def aguardar_retomada():
     if evento_stop.is_set():
         raise InterruptedError("Tradução encerrada.")
 
-def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
+def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None, reforcar_nome=False):
     instrucao = instrucao_system
+    if reforcar_nome:
+        instrucao += (
+            "\\nRETRY DE NOME: A resposta anterior foi inválida. Analise somente o nome enviado na mensagem do usuário. "
+            "Retorne exclusivamente o nome traduzido, sem repetir instruções, regras, rótulos ou explicações. "
+            "Se for marca, nome próprio ou denominação comercial sem tradução natural, preserve o nome original."
+        )
     if reforcar_marcadores:
         marcadores_esperados = (
             marcadores_forcados
@@ -206,7 +212,7 @@ def motivo_recusa(original, traducao):
         return "código de cor inventado"
     return None
 
-def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcadores_forcados=None):
+def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcadores_forcados=None, reforcar_nome=False):
     """
     Traduz e armazena o par mensagem/resposta exatamente como enviado à LLM.
     Se o texto contiver placeholders semânticos (_COR1, _TOKEN1...), ambos permanecem no cache.
@@ -238,7 +244,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
 
     try:
         response = llm.create_chat_completion(
-            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
+            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados, reforcar_nome),
             temperature=0.0,
             max_tokens=min(3072, len(texto) * 64),
         )
@@ -302,6 +308,38 @@ def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
     )
 
     marcadores_esperados = RE_MARCADOR.findall(texto_marcado)
+
+    # Nomes de itens têm uma segunda tentativa própria para qualquer resposta recusada
+    # (eco do prompt, erro da LLM ou falha estrutural). Se falhar novamente, preserva
+    # o original sem registrar uma falha definitiva no item.
+    falha_primeira_tentativa = len(para_revisar) > revisoes_antes
+    if is_nome_item and falha_primeira_tentativa:
+        print(f"[RETRY] {onde} — nova tentativa de tradução do nome.")
+        revisoes_antes_retry = len(para_revisar)
+        traducao_retry = traduzir_trecho(
+            texto_marcado,
+            is_nome_item,
+            f"{onde} (retry)",
+            reforcar_marcadores=True,
+            marcadores_forcados=[
+                f"_{tipo}{indice}" for tipo, indice in marcadores_esperados
+            ],
+            reforcar_nome=True,
+        )
+        retry_ok = (
+            len(para_revisar) == revisoes_antes_retry
+            and RE_MARCADOR.findall(traducao_retry) == marcadores_esperados
+        )
+
+        if retry_ok:
+            del para_revisar[revisoes_antes:revisoes_antes_retry]
+            traducao = traducao_retry
+            print(f"[RETRY OK] {onde} — nome traduzido.")
+        else:
+            del para_revisar[revisoes_antes:]
+            traducao = texto_marcado
+            print(f"[NOME ORIGINAL] {onde} — segunda tentativa inválida; mantendo o nome original.")
+
     falha_marcadores = (
         RE_MARCADOR.findall(traducao) != marcadores_esperados
         or any(
