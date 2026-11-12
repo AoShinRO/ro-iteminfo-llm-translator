@@ -761,10 +761,14 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
     print(f"[bRO] {len(itens_bro)} IDs com descrição válida disponíveis para reaproveitamento.")
 
     estado_valido = False
+    caminho_bro_normalizado = os.path.abspath(CAMINHO_BRO) if CAMINHO_BRO else ""
     try:
         with open(CAMINHO_ESTADO, "r", encoding="utf-8") as f:
             estado = json.load(f)
-        if estado.get("arquivo_entrada") == os.path.abspath(CAMINHO_ENTRADA):
+        if (
+            estado.get("arquivo_entrada") == os.path.abspath(CAMINHO_ENTRADA)
+            and estado.get("arquivo_bro", "") == caminho_bro_normalizado
+        ):
             estado_valido = True
         else:
             estado = {}
@@ -820,6 +824,14 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
                         if blocos_saida[item_id] != blocos_entrada[item_id]:
                             concluidos.add(item_id)
                 print("[INFO] Progresso legado recuperado do arquivo de saída.")
+            if not estado_valido and itens_bro:
+                ids_para_reaproveitar = set(itens_bro) & set(ids_itens)
+                concluidos.difference_update(ids_para_reaproveitar)
+                if ids_para_reaproveitar:
+                    print(
+                        f"[bRO] {len(ids_para_reaproveitar)} IDs serão reprocessados "
+                        "para aplicar a fonte bRO selecionada."
+                    )
         except Exception as erro_estado:
             linhas_saida_existente = None
             print(f"[AVISO] Não foi possível recuperar progresso do arquivo de saída: {erro_estado}")
@@ -839,6 +851,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
         with open(temporario, "w", encoding="utf-8") as f:
             json.dump({
                 "arquivo_entrada": os.path.abspath(CAMINHO_ENTRADA),
+                "arquivo_bro": caminho_bro_normalizado,
                 "itens_concluidos": sorted(concluidos, key=lambda x: int(x))
             }, f, ensure_ascii=False, indent=2)
         os.replace(temporario, CAMINHO_ESTADO)
