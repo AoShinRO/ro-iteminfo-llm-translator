@@ -153,7 +153,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
     instrucao = instrucao_system
     if reforcar_nome:
         instrucao += (
-            "\\nRETRY DE NOME: A resposta anterior foi inválida. Analise somente o nome enviado na mensagem do usuário. "
+            "\nRETRY DE NOME: A resposta anterior foi inválida. Analise somente o nome enviado na mensagem do usuário. "
             "Retorne exclusivamente o nome traduzido, sem repetir instruções, regras, rótulos ou explicações. "
             "Se for marca, nome próprio ou denominação comercial sem tradução natural, preserve o nome original."
         )
@@ -278,6 +278,12 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
     # IMPORTANTE: grava antes de restaurar tags. A chave E o valor ficam com placeholders.
     # Assim, o próximo processamento reutiliza a tradução marcada e só então restaura
     # cores, escapes Lua e separadores conforme a tabela de tags reconstruída no bloco.
+    # Se o modelo indicar que o nome já está adequado, preserva-o sem criar
+    # uma entrada N|original no cache; assim uma futura execução pode tentar de novo.
+    if is_nome_item and traducao_marcada.strip() == texto.strip():
+        aguardar_retomada()
+        return traducao_marcada
+
     cache_traducoes[chave.replace('\\\"',"'")] = traducao_marcada.replace('\\\"',"'")
     salvar_cache()
     aguardar_retomada()
@@ -334,7 +340,10 @@ def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
         if retry_ok:
             del para_revisar[revisoes_antes:revisoes_antes_retry]
             traducao = traducao_retry
-            print(f"[RETRY OK] {onde} — nome traduzido.")
+            if traducao_retry.strip() == texto_marcado.strip():
+                print(f"[NOME ORIGINAL] {onde} — modelo indicou preservar o nome original.")
+            else:
+                print(f"[RETRY OK] {onde} — nome traduzido.")
         else:
             del para_revisar[revisoes_antes:]
             traducao = texto_marcado
