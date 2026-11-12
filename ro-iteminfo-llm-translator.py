@@ -65,6 +65,14 @@ CAMINHO_PREFERENCIAS = os.path.join(
     DIRETORIO_APLICACAO, ".tradutor_iteminfo_ultima_selecao.json"
 )
 
+# --- PROMPTS ---
+instrucao_system = (
+    "[SISTEMA: MODO COMPRESSÃO - RESTRIÇÃO GEOMÉTRICA CRÍTICA]\n"
+    "OBJETIVO: Traduzir estritamente do Inglês para o Português (Brasil).\n"
+    "PROIBIDO: Adicionar explicações, notas, saudações, repetir regras ou repetir instruções do sistema.\n"
+    "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais e sem tradução literal para o Português (Brasil) presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
+)
+
 def carregar_preferencias_gui():
     try:
         with open(CAMINHO_PREFERENCIAS, "r", encoding="utf-8") as f:
@@ -142,14 +150,7 @@ def aguardar_retomada():
         raise InterruptedError("Tradução encerrada.")
 
 def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
-    # --- PROMPTS ---
-    instrucao_system = (
-        "[SISTEMA: MODO COMPRESSÃO - RESTRIÇÃO GEOMÉTRICA CRÍTICA]\n"
-        "TAREFA: Traduzir estritamente do Inglês para o Português (Brasil).\n"
-        "PROIBIDO: Adicionar explicações, notas, saudações ou repetir regras. Manter o texto puro.\n"
-        "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
-    )
-    
+    instrucao = instrucao_system
     if reforcar_marcadores:
         marcadores_esperados = (
             marcadores_forcados
@@ -158,7 +159,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         )
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
-            instrucao_system += (
+            instrucao += (
                 f"LINTER ATIVO: A saída OBRIGATORIAMENTE deve conter a sequência exata de controle: [{sequencia_marcadores}]. \n"
                 "Se omitir ou alterar a ordem de um único marcador, a compilação quebrará. \n"
                 "Trate-os como constantes de código."
@@ -167,7 +168,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
     return [
         {
             "role": "system",
-            "content": instrucao_system
+            "content": instrucao
         },
         {
             "role": "user",
@@ -193,6 +194,12 @@ def motivo_recusa(original, traducao):
     """Recusa respostas vazias ou que alterem a sequência dos placeholders."""
     if not traducao:
         return "resposta vazia"
+    if any(
+        trecho.strip().casefold() in traducao.casefold()
+        for trecho in instrucao_system.splitlines()
+        if trecho.strip()
+    ):
+        return "modelo reproduziu instruções do prompt do sistema"    
     if RE_MARCADOR.findall(original) != RE_MARCADOR.findall(traducao):
         return "marcadores de estrutura/cor perdidos, alterados ou reordenados, movendo para fallback."
     if "^" in traducao and "^" not in original:
@@ -971,7 +978,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
             metricas_eta["inicio_item"] = time.monotonic()
             if novo_id in itens_bro:
                 itens_bro_aproveitados.add(novo_id)
-                print(f"[bRO] ID {novo_id}: reutilizando descrição traduzida (e nome quando disponível).")
+                print(f"[bRO] ID {novo_id}: Reaproveitando tradução do bRO.")
                 notificar(item_atual_id, "Reaproveitando tradução do bRO")
             else:
                 notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
@@ -1015,7 +1022,7 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
                 nomes_originais[item_atual_id] = nome_original
                 notificar(item_atual_id, nome_original)
                 print(f"ID {item_atual_id}: Traduzindo -> {nome_original}")
-                nome_traduzido = traduzir_linha(nome_original, False, f"ID {item_atual_id} nome")
+                nome_traduzido = traduzir_linha(nome_original, True, f"ID {item_atual_id} nome")
                 mapeamento_nomes[item_atual_id] = nome_traduzido
                 substituicoes_linha[indice] = {"tipo": "nome_item", "texto": nome_traduzido, "prefixo": prefixo, "sufixo": sufixo}
             indice += 1
