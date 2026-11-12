@@ -39,6 +39,7 @@ except ImportError:
     raise
 
 CAMINHO_ENTRADA = ""
+CAMINHO_BRO = ""
 CAMINHO_SAIDA = ""
 CAMINHO_CACHE = ""
 CAMINHO_REVISAR = ""
@@ -72,10 +73,12 @@ def carregar_preferencias_gui():
     except (OSError, ValueError):
         return {}
 
-def salvar_preferencias_gui(iteminfo=None, modelo=None):
+def salvar_preferencias_gui(iteminfo=None, bro=None, modelo=None):
     dados = carregar_preferencias_gui()
     if iteminfo is not None:
         dados["arquivo_iteminfo"] = iteminfo
+    if bro is not None:
+        dados["arquivo_iteminfo_bro"] = bro
     if modelo is not None:
         dados["modelo_gguf"] = modelo
     temporario = CAMINHO_PREFERENCIAS + ".tmp"
@@ -593,6 +596,56 @@ def ler_bloco_descricoes(linhas, indice, correspondencia):
 
 
 
+def indexar_iteminfo_bro(caminho):
+    """Indexa somente os campos textuais aproveitáveis do bRO, por ID numérico."""
+    if not caminho:
+        return {}
+    if not os.path.isfile(caminho):
+        raise FileNotFoundError(f"ItemInfo do bRO não encontrado: {caminho}")
+
+    with open(caminho, "r", encoding=ENCODING_ARQUIVO) as arquivo:
+        linhas_bro = arquivo.read().split("\n")
+    if linhas_bro and linhas_bro[-1] == "":
+        linhas_bro.pop()
+
+    itens = {}
+    item_id = None
+    indice = 0
+    while indice < len(linhas_bro):
+        match_id = re.match(r"^\s*\[(\d+)\]\s*=\s*\{", linhas_bro[indice])
+        if match_id:
+            item_id = match_id.group(1)
+            itens[item_id] = {"display_line": None, "display_name": None, "description_lines": None}
+            indice += 1
+            continue
+
+        if item_id is None:
+            indice += 1
+            continue
+
+        match_nome = RE_ID_DISPLAY.match(linhas_bro[indice])
+        if match_nome:
+            itens[item_id]["display_line"] = linhas_bro[indice]
+            itens[item_id]["display_name"] = match_nome.group(2)
+
+        match_desc = INICIO_DESCRICAO.match(linhas_bro[indice])
+        if match_desc:
+            bloco, strings, fim = ler_bloco_descricoes(linhas_bro, indice, match_desc)
+            if any(texto.strip() for _, texto in strings):
+                itens[item_id]["description_lines"] = bloco
+            indice = fim + 1
+            continue
+
+        indice += 1
+
+    validos = {
+        item_id: dados
+        for item_id, dados in itens.items()
+        if dados["display_line"] is not None and dados["description_lines"] is not None
+    }
+    return validos
+
+
 def escapar_string_lua(texto):
     # Preserva os escapes Lua \n existentes sem duplicar barras invertidas.
     # Guardamos a sequência inteira (inclusive \\n, se houver) e restauramos ao final.
@@ -659,11 +712,12 @@ def detectar_threads_para_inferencia():
     print(f"[THREADS] Fallback: {logicos} núcleos lógicos detectados; usando {threads}.")
     return threads
     
-def executar_traducao(caminho_entrada, caminho_modelo, fila):
-    global CAMINHO_ENTRADA, CAMINHO_SAIDA, CAMINHO_CACHE, CAMINHO_REVISAR
+def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
+    global CAMINHO_ENTRADA, CAMINHO_BRO, CAMINHO_SAIDA, CAMINHO_CACHE, CAMINHO_REVISAR
     global NOME_MODELO_GGUF, CAMINHO_ESTADO, cache_traducoes, para_revisar, llm
 
     CAMINHO_ENTRADA = caminho_entrada
+    CAMINHO_BRO = caminho_bro or ""
     pasta_saida = os.path.dirname(os.path.abspath(caminho_entrada))
     CAMINHO_SAIDA = os.path.join(pasta_saida, "ItemInfo_traduzido.lua")
     CAMINHO_CACHE = os.path.join(pasta_saida, "cache_traducao_itens.json")
@@ -702,6 +756,9 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         n = RE_ID_DISPLAY.match(linha)
         if n and ids_itens:
             nomes_originais[ids_itens[-1]] = n.group(2)
+
+    itens_bro = indexar_iteminfo_bro(CAMINHO_BRO)
+    print(f"[bRO] {len(itens_bro)} IDs com descrição válida disponíveis para reaproveitamento.")
 
     estado_valido = False
     try:
@@ -871,8 +928,9 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
     elif concluidos:
         print("[AVISO] Saída anterior tem estrutura/quantidade de linhas diferente; não foi possível reaproveitar blocos concluídos.")
 
-    mapeamento_nomes = {}  
+    mapeamento_nomes = {}
     item_atual_id = None
+    itens_bro_aproveitados = set()
     substituicoes_linha = {} 
     linhas_bloqueadas_escrita = set()
 
@@ -898,7 +956,12 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 continue
             item_atual_id = novo_id
             metricas_eta["inicio_item"] = time.monotonic()
-            notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
+            if novo_id in itens_bro:
+                itens_bro_aproveitados.add(novo_id)
+                print(f"[bRO] ID {novo_id}: reutilizando nome e descrição traduzidos.")
+                notificar(item_atual_id, "Reaproveitando tradução do bRO")
+            else:
+                notificar(item_atual_id, nomes_originais.get(item_atual_id, "Traduzindo item..."))
        
         # 1. Aplica o texto padrão da Lupa
         match_unid_desc = RE_UNID_DESC.match(linha)
@@ -926,7 +989,12 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         match_id_disp = RE_ID_DISPLAY.match(linha)
         if match_id_disp:
             prefixo, nome_original, sufixo = match_id_disp.groups()
-            if nome_original.strip() and TRADUZIR_NOMES:
+            dados_bro = itens_bro.get(item_atual_id)
+            if dados_bro and item_atual_id in itens_bro_aproveitados:
+                nome_bro = RE_ID_DISPLAY.match(dados_bro["display_line"]).group(2)
+                mapeamento_nomes[item_atual_id] = nome_bro
+                substituicoes_linha[indice] = {"tipo": "linha_bro", "linha": dados_bro["display_line"]}
+            elif nome_original.strip() and TRADUZIR_NOMES:
                 nomes_originais[item_atual_id] = nome_original
                 notificar(item_atual_id, nome_original)
                 print(f"ID {item_atual_id}: Traduzindo -> {nome_original}")
@@ -948,8 +1016,14 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
         match_desc = INICIO_DESCRICAO.match(linha)
         if match_desc:
             bloco, conteudo_linhas, fim = ler_bloco_descricoes(linhas, indice, match_desc)
-            
-            if conteudo_linhas:
+            dados_bro = itens_bro.get(item_atual_id)
+            if dados_bro and item_atual_id in itens_bro_aproveitados:
+                substituicoes_linha[indice] = {
+                    "tipo": "bloco_bro",
+                    "linhas": dados_bro["description_lines"],
+                }
+                linhas_bloqueadas_escrita.update(range(indice + 1, fim + 1))
+            elif conteudo_linhas:
                 textos_traduzidos = traduzir_bloco_descricoes(
                     conteudo_linhas, f"ID {item_atual_id} descrição"
                 )
@@ -976,6 +1050,10 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
                 acao = substituicoes_linha[idx]
                 if isinstance(acao, str):
                     arq_saida.write(acao)
+                elif acao["tipo"] == "linha_bro":
+                    arq_saida.write(acao["linha"] + "\n")
+                elif acao["tipo"] == "bloco_bro":
+                    arq_saida.write("\n".join(acao["linhas"]) + "\n")
                 elif acao["tipo"] == "linha_desc":
                     # lambda: evita que o re.sub interprete as barras invertidas do texto traduzido
                     texto_escapado = escapar_string_lua(acao["texto"])
@@ -1009,9 +1087,9 @@ def executar_traducao(caminho_entrada, caminho_modelo, fila):
     fila.put(("concluido", len(concluidos), len(ids_itens), CAMINHO_SAIDA))
 
 
-def executar_com_tratamento(caminho_entrada, caminho_modelo, fila):
+def executar_com_tratamento(caminho_entrada, caminho_modelo, caminho_bro, fila):
     try:
-        executar_traducao(caminho_entrada, caminho_modelo, fila)
+        executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila)
     except Exception as erro:
         print(f"\\n[ERRO] Falha durante a tradução: {erro}")
         import traceback
@@ -1039,12 +1117,13 @@ class TradutorGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Tradutor ItemInfo LLM(Local) by AoShinHo")
-        self.geometry("810x603")
-        self.minsize(810, 603)
+        self.geometry("810x690")
+        self.minsize(810, 690)
         self.configure(fg_color=self.BG)
         self.fila = queue.Queue()
         preferencias = carregar_preferencias_gui()
         self.arquivo_iteminfo = preferencias.get("arquivo_iteminfo", "")
+        self.arquivo_bro = preferencias.get("arquivo_iteminfo_bro", "")
         self.arquivo_modelo = preferencias.get("modelo_gguf", "")
         self.executando = False
         self.pausado = False
@@ -1066,7 +1145,9 @@ class TradutorGUI(ctk.CTk):
         ctk.CTkLabel(corpo, text="Selecione o arquivo Lua e o modelo local para iniciar.",
                      font=ctk.CTkFont(size=18), text_color="#c4c9d2").pack(anchor="w", pady=(5, 20))
 
-        self._linha_selecao(corpo, "Arquivo ItemInfo.lua", "Selecionar arquivo",
+        self._linha_selecao(corpo, "ItemInfo.lua do bRO (opcional)", "Selecionar bRO",
+                            self._selecionar_bro, "bro")
+        self._linha_selecao(corpo, "Arquivo ItemInfo.lua de origem", "Selecionar arquivo",
                             self._selecionar_iteminfo, "iteminfo")
         self._linha_selecao(corpo, "Modelo de linguagem (.gguf)", "Selecionar modelo",
                             self._selecionar_modelo, "modelo")
@@ -1118,7 +1199,11 @@ class TradutorGUI(ctk.CTk):
         coluna.pack(side="left", fill="x", expand=True, padx=15, pady=9)
         ctk.CTkLabel(coluna, text=label, text_color="#e5e8ee",
                      font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w")
-        caminho_salvo = self.arquivo_iteminfo if tipo == "iteminfo" else self.arquivo_modelo
+        caminho_salvo = (
+            self.arquivo_iteminfo if tipo == "iteminfo"
+            else self.arquivo_bro if tipo == "bro"
+            else self.arquivo_modelo
+        )
         valor = ctk.CTkLabel(coluna, text=caminho_salvo or "Nenhum arquivo selecionado",
                              text_color=self.MUTED, font=ctk.CTkFont(size=18),
                              anchor="w")
@@ -1127,6 +1212,20 @@ class TradutorGUI(ctk.CTk):
         ctk.CTkButton(linha, text=button_text, width=144, height=36, corner_radius=9,
                       fg_color="#303744", hover_color="#414b5b",
                       command=command).pack(side="right", padx=13, pady=12)
+
+    def _selecionar_bro(self):
+        inicial = os.path.dirname(self.arquivo_bro) if os.path.isfile(self.arquivo_bro) else os.getcwd()
+        nome_inicial = os.path.basename(self.arquivo_bro) if os.path.isfile(self.arquivo_bro) else ""
+        caminho = filedialog.askopenfilename(
+            title="Selecione o ItemInfo.lua traduzido do bRO",
+            initialdir=inicial,
+            initialfile=nome_inicial,
+            filetypes=[("Arquivo Lua", "*.lua"), ("Todos os arquivos", "*.*")]
+        )
+        if caminho:
+            self.arquivo_bro = caminho
+            self.bro_label.configure(text=caminho)
+            salvar_preferencias_gui(bro=caminho)
 
     def _selecionar_iteminfo(self):
         inicial = os.path.dirname(self.arquivo_iteminfo) if os.path.isfile(self.arquivo_iteminfo) else os.getcwd()
@@ -1176,7 +1275,7 @@ class TradutorGUI(ctk.CTk):
         self.status.configure(text="Carregando modelo... (acompanhe detalhes no console)")
         worker = threading.Thread(
             target=executar_com_tratamento,
-            args=(self.arquivo_iteminfo, self.arquivo_modelo, self.fila),
+            args=(self.arquivo_iteminfo, self.arquivo_modelo, self.arquivo_bro, self.fila),
             daemon=True
         )
         worker.start()
