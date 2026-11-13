@@ -252,18 +252,6 @@ def traduzir_linha(texto, is_nome_item, onde):
     # Envia a LINHA COMPLETA (prefixo + conteúdo) ao modelo
     traducao = traduzir_trecho(texto_limpo, is_nome_item, onde)
 
-    # Segurança: se o modelo descartou o prefixo, re-insere e atualiza o cache
-    if prefixo_lista:
-        nucleo = prefixo_lista.strip()
-        if not re.match(rf"^\s*{re.escape(nucleo)}", traducao):
-            traducao_corrigida = prefixo_lista + traducao.lstrip()
-            chave = f"{'N' if is_nome_item else 'D'}|{texto_limpo}"
-            cache_traducoes[chave] = traducao_corrigida
-            salvar_cache()
-            print(f"[PREFIXO] {onde} — prefixo '{prefixo_lista.strip()}' "
-                  f"re-inserido; cache atualizado.")
-            traducao = traducao_corrigida
-
     return esquerda + traducao + direita
 
 
