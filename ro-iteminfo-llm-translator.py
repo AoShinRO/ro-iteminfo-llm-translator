@@ -66,16 +66,7 @@ CAMINHO_PREFERENCIAS = os.path.join(
 )
 
 # --- PROMPTS ---
-"""
-instrucao_system = (
-    "[SISTEMA: RESTRIÇÃO GEOMÉTRICA CRÍTICA]\n"
-    "OBJETIVO: Traduzir estritamente do Inglês para o Português (Brasil).\n"
-    "PROIBIDO: Adicionar explicações, notas, saudações.\n"
-    "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
-)
-"""
-instrucao_system = ("Translate the following segment into Portuguese, without additional explanation")
-delirio = "[CONSTANTES:"
+instrucao_system = ("Translate the following segment into Portuguese, without additional explanation, without change ^hexcode place")
 
 def carregar_preferencias_gui():
     try:
@@ -105,12 +96,7 @@ def salvar_preferencias_gui(iteminfo=None, bro=None, modelo=None):
 # latin-1 mapeia cada byte para exatamente um caractere, então ler e gravar com ele preserva,
 # byte a byte, tudo o que não é traduzido (os acentos do português têm os mesmos bytes no cp1252).
 # Não use detector de encoding nem errors="ignore" aqui: isso destrói os identifiedResourceName.
-# Obs.: editores (Notepad++) mostram a saída como "ANSI" porque ela mistura os bytes coreanos originais
-# com acentos cp1252 e isso não é mais EUC-KR válido. É o mesmo rótulo do ItemInfo original do bRO.
-# O ItemInfo do cliente usa CRLF. Antes a saída saía em LF por causa do newline="\n" na escrita.
-
-# Traduzir os nomes dos itens (identifiedDisplayName / unidentifiedDisplayName)? O script antigo
-# (Google) só traduzia descrições. Com um modelo pequeno, False deixa os nomes originais.
+# O ItemInfo do cliente usa CRLF.
 
 # Expressões regulares nativas
 RE_ID_DISPLAY = re.compile(r"^(\s*identifiedDisplayName\s*=\s*\")(.*)(\"\s*,?\s*(?:--.*)?)$")
@@ -122,11 +108,6 @@ FIM_DESCRICAO = re.compile(r"^\s*\},?\s*(?:--.*)?$")
 FECHAMENTO_INLINE = re.compile(r"\}\s*,?\s*(?:--.*)?$")
 STRING_LUA = re.compile(r'"((?:\\.|[^"\\])*)"')
 
-RE_COR = re.compile(r"(\^[0-9A-Fa-f]{6})")   # códigos de cor do jogo, ex.: ^990099
-# Placeholders semânticos em português, com contador independente por categoria.
-# Marcadores literais que já existam no arquivo também são protegidos para evitar colisões.
-RE_MARCADOR = re.compile(r"_(COR|TOKEN|QUEBRA)(\d+)")
-RE_PROTEGIDO = re.compile(r"(\\n|\^[0-9A-Fa-f]{6}|_(?:COR|TOKEN|QUEBRA)\d+|_{3,}|_\d+)")
 RE_LETRAS = re.compile(r"[A-Za-z]{2,}")      # tem palavra para traduzir?
 RE_NUMEROS = re.compile(r"\d+")
 
@@ -153,25 +134,11 @@ def aguardar_retomada():
     if evento_stop.is_set():
         raise InterruptedError("Tradução encerrada.")
 
-def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_forcados=None):
-    instrucao = instrucao_system
-
-    if reforcar_marcadores:
-        marcadores_esperados = (
-            marcadores_forcados
-            if marcadores_forcados is not None
-            else [f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)]
-        )
-        if marcadores_esperados:
-            sequencia_marcadores = ", ".join(marcadores_esperados)
-            instrucao += (
-                f"{delirio}({sequencia_marcadores}]) na ordem {texto}:"
-            )
-
+def montar_mensagens(texto):
     return [
         {
             "role": "system",
-            "content": instrucao
+            "content": instrucao_system
         },
         {
             "role": "user",
@@ -182,394 +149,140 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
 def limpar_resposta(texto, original):
     texto = texto.strip()
     texto = re.sub(r"\s*\r?\n\s*", " ", texto)
+
     aspas = "\"'“”‘’"
     if len(texto) >= 2 and texto[0] in aspas and texto[-1] in aspas:
         texto = texto[1:-1].strip()
+
     texto = texto.translate(TABELA_TIPOGRAFICA)
-    texto = re.sub(r"_(COR|TOKEN|QUEBRA)\s+(\d+)", r"_\1\2", texto, flags=re.IGNORECASE)
-    texto = re.sub(r"_(COR|TOKEN|QUEBRA)(\d+)", lambda m: f"_{m.group(1).upper()}{m.group(2)}", texto, flags=re.IGNORECASE)
-    if texto.endswith(".") and not original.rstrip().endswith("."):
-        texto = texto[:-1]
+
+    # Conta os pontos no original e na tradução
+    qtd_orig = original.count(".")
+    qtd_trad = texto.count(".")
+
+    # Se a tradução tiver mais pontos que o original
+    if qtd_trad > qtd_orig:
+        excesso = qtd_trad - qtd_orig
+        # Remove o ponto seguido de espaço (count=excesso garante que só apague os extras)
+        texto = re.sub(r"\.\s+", "", texto, count=excesso)
+        if texto.count(".") > qtd_orig:
+            texto = texto.replace(".", "", texto.count(".") - qtd_orig)
+            
+    if " - " in texto and " - " not in original:
+        texto = texto.replace(" - ", "")
+
     return texto
 
 
 def motivo_recusa(original, traducao):
-    """Recusa respostas vazias ou que alterem a sequência dos placeholders."""
+    """Recusa respostas vazias ou que reproduzam o prompt do sistema."""
     if not traducao:
         return "resposta vazia"
     if any(
         trecho.strip().casefold() in traducao.casefold()
         for trecho in instrucao_system.splitlines()
         if trecho.strip()
-    ) or delirio in traducao.casefold():
-        return "modelo reproduziu instruções do prompt do sistema"    
-    if RE_MARCADOR.findall(original) != RE_MARCADOR.findall(traducao):
-        return "marcadores de estrutura/cor perdidos, alterados ou reordenados, movendo para fallback."
-    if "^" in traducao and "^" not in original:
-        return "código de cor inventado"
+    ):
+        return "modelo reproduziu instruções do prompt do sistema"
     return None
 
-def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcadores_forcados=None):
+def traduzir_trecho(texto, is_nome_item, onde):
     """
-    Traduz e armazena o par mensagem/resposta exatamente como enviado à LLM.
-    Se o texto contiver placeholders semânticos (_COR1, _TOKEN1...), ambos permanecem no cache.
-    A restauração das patterns acontece somente depois que esta função retorna.
+    Traduz um trecho completo. Apenas escapes \\n literais dentro da string
+    são protegidos com placeholders internos (sem o antigo sistema de marcadores
+    _TOKEN/_COR/_QUEBRA). Nada de validação de marcadores nem retry.
     """
     chave = f"{'N' if is_nome_item else 'D'}|{texto}"
 
-    # A chave contém a mensagem marcada original; o valor contém a tradução marcada.
     if chave in cache_traducoes:
-        traducao_marcada = cache_traducoes[chave]
-        motivo_cache = motivo_recusa(texto, traducao_marcada)
-        if not motivo_cache:
-            return traducao_marcada
-        print(f"[AVISO] Cache de placeholders inválido descartado ({motivo_cache}): {onde}")
+        traducao = cache_traducoes[chave]
+        if traducao:
+            return traducao
         del cache_traducoes[chave]
 
     if "(null)" in texto:
         cache_traducoes[chave] = "(null)"
         salvar_cache()
-        aguardar_retomada()        
+        aguardar_retomada()
         return "(null)"
     if " " == texto:
         cache_traducoes[chave] = " "
         salvar_cache()
-        aguardar_retomada()          
+        aguardar_retomada()
         return " "
-        
+
     aguardar_retomada()
+
 
     try:
         response = llm.create_chat_completion(
-            messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
-            temperature = 0.5,
+            messages=montar_mensagens(texto),
+            temperature=0.0,
             max_tokens=min(51200, len(texto) * 512),
         )
         conteudo_cru = response['choices'][0]['message']['content']
-        traducao_marcada = limpar_resposta(conteudo_cru, texto)
+        traducao = limpar_resposta(conteudo_cru, texto)
 
         # Remove asteriscos de negrito que o modelo insiste em colocar às vezes.
-        traducao_marcada = traducao_marcada.replace("**", "").replace("*", "")
-        traducao_marcada = traducao_marcada.replace('"', "'").replace("Traduza para 'pt':", "").replace('\\\"', "'")
+        traducao = traducao.replace("**", "").replace("*", "")
+        traducao = traducao.replace('"', "'").replace('\\\"', "'")
+
     except Exception as e:
         if isinstance(e, InterruptedError) or evento_stop.is_set():
             raise InterruptedError("Tradução interrompida pelo usuário.")
         para_revisar.append((onde, texto, f"erro na LLM: {e}"))
         return texto
 
-    motivo = motivo_recusa(texto, traducao_marcada)
+    motivo = motivo_recusa(texto, traducao)
     if motivo:
-        detalhe = f"{motivo}: {traducao_marcada!r}"
-        para_revisar.append((onde, texto, detalhe))
+        para_revisar.append((onde, texto, motivo))
         print(f"[CACHE NÃO GRAVADO] {onde} — {motivo}")
-        marcadores_esperados = " ".join(
-            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(texto)
-        )
-        marcadores_recebidos = " ".join(
-            f"_{tipo}{indice}" for tipo, indice in RE_MARCADOR.findall(traducao_marcada)
-        )
-        print(f"  Marcadores esperados: {marcadores_esperados}")
-        print(f"  Marcadores recebidos: {marcadores_recebidos}")
-        return texto  # mantém a mensagem marcada original; não grava resposta inválida.
+        return texto
 
-    # IMPORTANTE: grava antes de restaurar tags. A chave E o valor ficam com placeholders.
-    # Assim, o próximo processamento reutiliza a tradução marcada e só então restaura
-    # cores, escapes Lua e separadores conforme a tabela de tags reconstruída no bloco.
-
-    cache_traducoes[chave.replace('\\\"',"'")] = traducao_marcada.replace('\\\"',"'")
+    cache_traducoes[chave.replace('\\\"', "'")] = traducao.replace('\\\"', "'")
     salvar_cache()
     aguardar_retomada()
-    return traducao_marcada
+    return traducao
 
-def traduzir_linha(texto, is_nome_item, onde, reforcar_marcadores=False):
-    """Traduz uma string protegendo cores, escapes Lua e patterns estruturais."""
+def traduzir_linha(texto, is_nome_item, onde):
+    """Traduz a linha completa (com prefixo de lista, se houver)."""
     esquerda = texto[:len(texto) - len(texto.lstrip())]
     direita = texto[len(texto.rstrip()):]
     texto_limpo = texto.strip()
 
-    match_lista = re.match(r"^(\d+[\.\)\-\s:]+\s*)", texto_limpo)
-    prefixo_lista = ""
-    if match_lista:
-        prefixo_lista = match_lista.group(1)
-        texto_limpo = texto_limpo[len(prefixo_lista):].strip()
-
     if not RE_LETRAS.search(texto_limpo):
-        return esquerda + prefixo_lista + texto_limpo + direita
+        return esquerda + texto_limpo + direita
 
-    texto_marcado, tags = extrair_preservando_tags(texto_limpo)
-    revisoes_antes = len(para_revisar)
-    traducao = traduzir_trecho(
-        texto_marcado,
-        is_nome_item,
-        onde,
-        reforcar_marcadores=False,
-    )
+    # Detecta o prefixo de lista ("1. ", "2) ", "- ", etc.) para verificação
+    match_lista = re.match(r"^(\d+[\.\)\-\s:]+\s*)", texto_limpo)
+    prefixo_lista = match_lista.group(1) if match_lista else ""
 
-    marcadores_esperados = RE_MARCADOR.findall(texto_marcado)    
-    falha_marcadores = (
-        RE_MARCADOR.findall(traducao) != marcadores_esperados
-        or any(
-            motivo.startswith(
-                "marcadores de estrutura/cor perdidos, alterados ou reordenados"
-            )
-            for _, _, motivo in para_revisar[revisoes_antes:]
-        )
-    )
+    # Envia a LINHA COMPLETA (prefixo + conteúdo) ao modelo
+    traducao = traduzir_trecho(texto_limpo, is_nome_item, onde)
 
-    # No fallback individual, tenta primeiro com o prompt normal e só reforça
-    # a sequência de marcadores se a validação estrutural da primeira tentativa falhar.
-    if reforcar_marcadores and falha_marcadores:
-        sequencia_marcadores_linha = " ".join(
-            f"_{tipo}{indice}" for tipo, indice in marcadores_esperados
-        )
-        print(
-            f"[RETRY] {onde} — nova tentativa individual; "
-            f"marcadores da linha: {sequencia_marcadores_linha}"
-        )
-        revisoes_antes_retry = len(para_revisar)
-        traducao_retry = traduzir_trecho(
-            texto_marcado,
-            is_nome_item,
-            f"{onde} (retry)",
-            reforcar_marcadores=True,
-            marcadores_forcados=[
-                f"_{tipo}{indice}" for tipo, indice in marcadores_esperados
-            ],
-        )
-        retry_ok = (
-            len(para_revisar) == revisoes_antes_retry
-            and RE_MARCADOR.findall(traducao_retry) == marcadores_esperados
-        )
+    # Segurança: se o modelo descartou o prefixo, re-insere e atualiza o cache
+    if prefixo_lista:
+        nucleo = prefixo_lista.strip()
+        if not re.match(rf"^\s*{re.escape(nucleo)}", traducao):
+            traducao_corrigida = prefixo_lista + traducao.lstrip()
+            chave = f"{'N' if is_nome_item else 'D'}|{texto_limpo}"
+            cache_traducoes[chave] = traducao_corrigida
+            salvar_cache()
+            print(f"[PREFIXO] {onde} — prefixo '{prefixo_lista.strip()}' "
+                  f"re-inserido; cache atualizado.")
+            traducao = traducao_corrigida
 
-        if retry_ok:
-            # A falha inicial foi recuperada; não deve aparecer no arquivo de revisão.
-            del para_revisar[revisoes_antes:revisoes_antes_retry]
-            traducao = traducao_retry
-            print(f"[RETRY OK] {onde} — linha recuperada e cacheada.")
-        else:
-            # Mantém apenas o registro da tentativa definitiva.
-            del para_revisar[revisoes_antes:revisoes_antes_retry]
-            print(f"[RETRY FALHOU] {onde} — mantendo a linha original.")
-
-    if RE_MARCADOR.findall(texto_marcado) != RE_MARCADOR.findall(traducao):
-        return texto
-
-    return esquerda + prefixo_lista + restaurar_tags(traducao, tags) + direita
-
-
-def proximo_marcador(tags, tipo, texto=""):
-    """Gera um identificador semântico ainda não usado nem presente no texto original."""
-    usados = {tag["marcador"] for tag in tags}
-    indice = 1
-    while f"_{tipo}{indice}" in usados or f"_{tipo}{indice}" in texto:
-        indice += 1
-    return f"_{tipo}{indice}"
-
-
-def extrair_preservando_tags(texto, tags=None):
-    """Protege patterns usando marcadores semânticos em português."""
-    if tags is None:
-        tags = []
-
-    def _substituir(m):
-        valor = m.group(0)
-        antes = texto[m.start() - 1] if m.start() > 0 else ""
-        depois = texto[m.end()] if m.end() < len(texto) else ""
-        espaco_esquerda = bool(antes and antes.isalnum())
-        espaco_direita = bool(depois and depois.isalnum())
-
-        if valor.startswith("^"):
-            tipo = "COR"
-        elif valor == r"\n":
-            tipo = "QUEBRA"
-        else:
-            tipo = "TOKEN"
-
-        marcador = proximo_marcador(tags, tipo, texto)
-        tags.append({
-            "marcador": marcador,
-            "valor": valor,
-            "tipo": tipo.lower(),
-            "espaco_esquerda": espaco_esquerda,
-            "espaco_direita": espaco_direita,
-        })
-        return f"{' ' if espaco_esquerda else ''}{marcador}{' ' if espaco_direita else ''}"
-
-    return RE_PROTEGIDO.sub(_substituir, texto), tags
-
-
-def restaurar_tags(texto, tags):
-    """Restaura os valores originais e remove apenas os espaços inseridos ao redor dos markers."""
-    partes = []
-    ultimo = 0
-    tags_por_marcador = {tag["marcador"]: tag for tag in tags}
-
-    for m in RE_MARCADOR.finditer(texto):
-        marcador = m.group(0)
-        tag = tags_por_marcador.get(marcador)
-        if tag is None:
-            continue
-
-        esquerda = texto[ultimo:m.start()]
-        if tag.get("espaco_esquerda") and esquerda.endswith(" "):
-            esquerda = esquerda[:-1]
-        partes.append(esquerda)
-        partes.append(tag["valor"])
-
-        ultimo = m.end()
-        if tag.get("espaco_direita") and texto[ultimo:ultimo + 1] == " ":
-            ultimo += 1
-
-    partes.append(texto[ultimo:])
-    return "".join(partes)
+    return esquerda + traducao + direita
 
 
 def traduzir_bloco_descricoes(conteudo_linhas, onde):
-    """Agrupa strings do array para dar contexto à LLM e depois remonta cada elemento."""
+    """Traduz cada linha do array de descrição individualmente (linha completa ao modelo)."""
     if not conteudo_linhas:
         return []
 
-    tags = []
-    marcadores_separadores = set()
-    partes = []
-    bordas = []
-
-    for posicao, (_, texto_original) in enumerate(conteudo_linhas):
-        esquerda = texto_original[:len(texto_original) - len(texto_original.lstrip())]
-        direita = texto_original[len(texto_original.rstrip()):]
-        bordas.append((esquerda, direita))
-
-        if posicao:
-            # Um marcador _TOKENn representa a vírgula entre elementos do array; ele separa os segmentos.
-            # e o escritor mantém a vírgula física original fora das strings Lua.
-            marcador_separador = proximo_marcador(tags, "TOKEN", texto_original)
-            tags.append({
-                "marcador": marcador_separador,
-                "valor": ",",
-                "tipo": "separador",
-                "espaco_esquerda": True,
-                "espaco_direita": True,
-            })
-            marcadores_separadores.add(marcador_separador)
-            partes.append(f" {marcador_separador} ")
-
-        texto_marcado, tags = extrair_preservando_tags(texto_original.strip(), tags)
-        partes.append(texto_marcado)
-
-    texto_unido = "".join(partes)
-    if not RE_LETRAS.search(RE_MARCADOR.sub("", texto_unido)):
-        return [texto for _, texto in conteudo_linhas]
-
-    # (null) tem tratamento próprio no tradutor atual; não misture com um bloco maior.
-    if any("(null)" in texto for _, texto in conteudo_linhas):
-        return [
-            traduzir_linha(
-                texto,
-                False,
-                f"{onde}, linha {indice + 1}",
-                reforcar_marcadores=True,
-            )
-            for indice, texto in conteudo_linhas
-        ]
-
-    revisoes_antes = len(para_revisar)
-    traducao_unida = traduzir_trecho(texto_unido, False, onde)
-
-    marcadores_esperados = RE_MARCADOR.findall(texto_unido)
-    marcadores_recebidos = RE_MARCADOR.findall(traducao_unida)
-    houve_falha = (
-        len(para_revisar) > revisoes_antes
-        or marcadores_recebidos != marcadores_esperados
-    )
-
-    if houve_falha:
-        # traduzir_trecho devolve o original quando rejeita uma resposta.
-        # Por isso, a diferença de marcadores também precisa ser identificada
-        # pelo motivo registrado em para_revisar.
-        falha_marcadores = (
-            marcadores_recebidos != marcadores_esperados
-            or any(
-                motivo.startswith(
-                    "marcadores de estrutura/cor perdidos, alterados ou reordenados"
-                )
-                for _, _, motivo in para_revisar[revisoes_antes:]
-            )
-        )
-
-        if falha_marcadores:
-            print(f"[RETRY] {onde} — nova tentativa após falha de marcadores.")
-            revisoes_antes_retry = len(para_revisar)
-            traducao_retry = traduzir_trecho(
-                texto_unido,
-                False,
-                f"{onde} (retry)",
-                reforcar_marcadores=True,
-            )
-            marcadores_retry = RE_MARCADOR.findall(traducao_retry)
-
-            retry_ok = (
-                len(para_revisar) == revisoes_antes_retry
-                and marcadores_retry == marcadores_esperados
-            )
-
-            if retry_ok:
-                # Remove o registro da primeira tentativa, agora recuperada.
-                del para_revisar[revisoes_antes:revisoes_antes_retry]
-                traducao_unida = traducao_retry
-                marcadores_recebidos = marcadores_retry
-                print(f"[RETRY OK] {onde} — bloco recuperado e cacheado.")
-            else:
-                print(f"[RETRY FALHOU] {onde} — acionando fallback linha a linha.")
-                # Registros de tentativas do bloco não representam falhas finais.
-                # O fallback registrará somente as linhas que realmente falharem.
-                del para_revisar[revisoes_antes:]
-                return [
-                    traduzir_linha(
-                        texto,
-                        False,
-                        f"{onde}, linha {indice + 1}",
-                        reforcar_marcadores=True,
-                    )
-                    for indice, texto in conteudo_linhas
-                ]
-        else:
-            print(f"[FALLBACK] {onde} — falha não relacionada a marcadores.")
-            del para_revisar[revisoes_antes:]
-            return [
-                traduzir_linha(
-                    texto,
-                    False,
-                    f"{onde}, linha {indice + 1}",
-                    reforcar_marcadores=True,
-                )
-                for indice, texto in conteudo_linhas
-            ]
-
-    textos_traduzidos = []
-    inicio_trecho = 0
-    for marcador in RE_MARCADOR.finditer(traducao_unida):
-        if marcador.group(0) in marcadores_separadores:
-            trecho = traducao_unida[inicio_trecho:marcador.start()]
-            textos_traduzidos.append(restaurar_tags(trecho, tags).strip())
-            inicio_trecho = marcador.end()
-
-    trecho_final = traducao_unida[inicio_trecho:]
-    textos_traduzidos.append(restaurar_tags(trecho_final, tags).strip())
-
-    if len(textos_traduzidos) != len(conteudo_linhas):
-        return [
-            traduzir_linha(
-                texto,
-                False,
-                f"{onde}, linha {indice + 1}",
-                reforcar_marcadores=True,
-            )
-            for indice, texto in conteudo_linhas
-        ]
-
     return [
-        esquerda + texto + direita
-        for texto, (esquerda, direita) in zip(textos_traduzidos, bordas)
+        traduzir_linha(texto, False, f"{onde}, linha {indice + 1}")
+        for indice, (_, texto) in enumerate(conteudo_linhas)
     ]
 
 
@@ -604,7 +317,6 @@ def ler_bloco_descricoes(linhas, indice, correspondencia):
 
     bloco.append(linhas[atual])
     return bloco, conteudo_linhas, atual
-
 
 
 def indexar_iteminfo_bro(caminho):
@@ -715,9 +427,6 @@ def detectar_threads_para_inferencia():
               "Recomendado: pip install psutil")
 
     # Fallback: os.cpu_count() retorna lógicos em muitas plataformas.
-    # Em CPUs sem SMT (Phenom II, i5 antigos) o valor está correto;
-    # em CPUs com SMT pode superestimar (oversubscription), mas é
-    # preferível a travar com um número fixo.
     logicos = os.cpu_count() or 4
     threads = max(1, logicos - 1)
     print(f"[THREADS] Fallback: {logicos} núcleos lógicos detectados; usando {threads}.")
@@ -848,7 +557,6 @@ def executar_traducao(caminho_entrada, caminho_modelo, caminho_bro, fila):
             print(f"[AVISO] Não foi possível recuperar progresso do arquivo de saída: {erro_estado}")
 
     # ETA incremental: média aritmética atualizada a cada item finalizado.
-    # O contador de restantes considera apenas itens ainda não processados nesta execução.
     metricas_eta = {
         "total": max(0, len(ids_itens) - len(concluidos)),
         "processados": 0,
