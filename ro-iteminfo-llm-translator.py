@@ -165,7 +165,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao += (
-                f"{delirio}[{sequencia_marcadores}]]\n"
+                f"{delirio}({sequencia_marcadores}]) na ordem {texto}:"
             )
 
     return [
