@@ -66,14 +66,16 @@ CAMINHO_PREFERENCIAS = os.path.join(
 )
 
 # --- PROMPTS ---
+"""
 instrucao_system = (
     "[SISTEMA: RESTRIÇÃO GEOMÉTRICA CRÍTICA]\n"
     "OBJETIVO: Traduzir estritamente do Inglês para o Português (Brasil).\n"
-    "PROIBIDO: Adicionar explicações, notas, saudações, repetir regras e instruções do sistema.\n"
+    "PROIBIDO: Adicionar explicações, notas, saudações.\n"
     "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
 )
-
-delirio_coreano = "[시스템: 결정적인 기하학적 제한]"
+"""
+instrucao_system = ("Translate the following segment into Portuguese, without additional explanation.")
+delirio = "A saída OBRIGATORIAMENTE deve conter a sequência exata de controle"
 
 def carregar_preferencias_gui():
     try:
@@ -201,7 +203,7 @@ def motivo_recusa(original, traducao):
         trecho.strip().casefold() in traducao.casefold()
         for trecho in instrucao_system.splitlines()
         if trecho.strip()
-    ) or delirio_coreano in traducao.casefold():
+    ) or delirio in traducao.casefold():
         return "modelo reproduziu instruções do prompt do sistema"    
     if RE_MARCADOR.findall(original) != RE_MARCADOR.findall(traducao):
         return "marcadores de estrutura/cor perdidos, alterados ou reordenados, movendo para fallback."
@@ -242,8 +244,8 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
     try:
         response = llm.create_chat_completion(
             messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
-            temperature=0.0,
-            max_tokens=min(3072, len(texto) * 64),
+            temperature = 0.0,
+            max_tokens=min(8000, len(texto) * 64),
         )
         conteudo_cru = response['choices'][0]['message']['content']
         traducao_marcada = limpar_resposta(conteudo_cru, texto)
