@@ -74,8 +74,8 @@ instrucao_system = (
     "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
 )
 """
-instrucao_system = ("Translate the following segment into Portuguese, without additional explanation, preserve ALL words started with underline.")
-delirio = "Manter TODOS:"
+instrucao_system = ("Translate the following segment into Portuguese, without additional explanation, keep ALL words start with underline:")
+delirio = "[CONSTANTS:"
 
 def carregar_preferencias_gui():
     try:
@@ -165,7 +165,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao += (
-                f"Manter TODOS: [{sequencia_marcadores}]."
+                f"[CONSTANTS: [{sequencia_marcadores}]]:"
             )
 
     return [
@@ -243,7 +243,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
         response = llm.create_chat_completion(
             messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
             temperature = 0.1,
-            max_tokens=min(20000, len(texto) * 128),
+            max_tokens=min(51200, len(texto) * 512),
         )
         conteudo_cru = response['choices'][0]['message']['content']
         traducao_marcada = limpar_resposta(conteudo_cru, texto)
