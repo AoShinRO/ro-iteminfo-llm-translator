@@ -157,20 +157,24 @@ def limpar_resposta(texto, original):
     texto = texto.translate(TABELA_TIPOGRAFICA)
 
     # Conta os pontos no original e na tradução
-    qtd_orig = original.count(".")
-    qtd_trad = texto.count(".")
+    qtd_orig = original.count(". ")
+    qtd_trad = texto.count(". ")
 
     # Se a tradução tiver mais pontos que o original
     if qtd_trad > qtd_orig:
         excesso = qtd_trad - qtd_orig
         # Remove o ponto seguido de espaço (count=excesso garante que só apague os extras)
-        texto = re.sub(r"\.\s+", "", texto, count=excesso)
-        if texto.count(".") > qtd_orig:
-            texto = texto.replace(".", "", texto.count(".") - qtd_orig)
+        texto = re.sub(r"\.\s+", ", ", texto, count=excesso)
+        if texto.count(". ") > qtd_orig:
+            texto = texto.replace(". ", ", ", texto.count(". ") - qtd_orig)
             
     if " - " in texto and " - " not in original:
         texto = texto.replace(" - ", "")
-
+                
+    if "..." in texto and "..." not in original:
+        texto = re.sub(r"\.\.\.", "", texto, count=(texto.count("...") - original.count("...")))
+    if "..," in texto and "..," not in original:
+        texto = texto.replace("..,", "")
     return texto
 
 
@@ -218,7 +222,7 @@ def traduzir_trecho(texto, is_nome_item, onde):
         response = llm.create_chat_completion(
             messages=montar_mensagens(texto),
             temperature=0.0,
-            max_tokens=min(51200, len(texto) * 512),
+            max_tokens=min(6400, len(texto) * 64),
         )
         conteudo_cru = response['choices'][0]['message']['content']
         traducao = limpar_resposta(conteudo_cru, texto)
