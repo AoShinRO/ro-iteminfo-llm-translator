@@ -155,18 +155,6 @@ def limpar_resposta(texto, original):
         texto = texto[1:-1].strip()
 
     texto = texto.translate(TABELA_TIPOGRAFICA)
-
-    # Conta os pontos no original e na tradução
-    qtd_orig = original.count(".")
-    qtd_trad = texto.count(".")
-
-    # Se a tradução tiver mais pontos que o original
-    if qtd_trad > qtd_orig:
-        excesso = qtd_trad - qtd_orig
-        # Remove o ponto seguido de espaço (count=excesso garante que só apague os extras)
-        texto = re.sub(r"\.\s+", ", ", texto, count=excesso)
-        if texto.count(".") > qtd_orig:
-            texto = texto.replace(".", ",", texto.count(".") - qtd_orig)
             
     if " - " in texto and " - " not in original:
         texto = texto.replace(" - ", "")
