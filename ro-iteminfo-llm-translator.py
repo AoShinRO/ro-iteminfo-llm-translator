@@ -242,7 +242,7 @@ def traduzir_trecho(texto, is_nome_item, onde, reforcar_marcadores=False, marcad
     try:
         response = llm.create_chat_completion(
             messages=montar_mensagens(texto, is_nome_item, reforcar_marcadores, marcadores_forcados),
-            temperature = 0.1,
+            temperature = 0.5,
             max_tokens=min(51200, len(texto) * 512),
         )
         conteudo_cru = response['choices'][0]['message']['content']
