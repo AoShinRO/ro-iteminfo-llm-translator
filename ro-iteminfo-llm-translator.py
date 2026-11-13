@@ -75,7 +75,7 @@ instrucao_system = (
 )
 """
 instrucao_system = ("Translate the following segment into Portuguese, without additional explanation")
-delirio = "[MANTER MARCADORES:"
+delirio = "[CONSTANTES:"
 
 def carregar_preferencias_gui():
     try:
@@ -165,7 +165,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao += (
-                f"{delirio} [{sequencia_marcadores}]]:"
+                f"{delirio}[{sequencia_marcadores}]]\n"
             )
 
     return [
