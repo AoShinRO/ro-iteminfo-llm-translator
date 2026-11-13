@@ -2,7 +2,8 @@
 
 Tradutor offline do `ItemInfo.lua` do Ragnarok Online (inglês → português brasileiro) usando um modelo de linguagem local no formato GGUF, via `llama-cpp-python`. Possui interface gráfica (customtkinter) com barra de progresso, pausa/retomada, cache de traduções e recuperação de progresso entre execuções.
 
-<img width="405" height="327" alt="image" src="https://github.com/user-attachments/assets/b8d00d75-03ab-462b-93c1-258bdb96bd0a" />
+<img width="812" height="726" alt="image" src="https://github.com/user-attachments/assets/e2751639-a5fe-4f1e-aebb-b4934847ce87" />
+
 
 ## Funcionalidades
 
