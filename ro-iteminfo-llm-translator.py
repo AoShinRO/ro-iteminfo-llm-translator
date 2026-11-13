@@ -74,8 +74,8 @@ instrucao_system = (
     "ÂNCORA SINTÁTICA: Identificadores técnicos estruturais presentes no texto de entrada são constantes invariáveis. Preserve-os exatamente, sem traduzir, modificar, duplicar ou inventar identificadores ausentes."
 )
 """
-instrucao_system = ("Translate the following segment into Portuguese, without additional explanation, keep ALL words start with underline:")
-delirio = "[CONSTANTS:"
+instrucao_system = ("Translate the following segment into Portuguese, without additional explanation")
+delirio = "[MANTER MARCADORES:"
 
 def carregar_preferencias_gui():
     try:
@@ -165,7 +165,7 @@ def montar_mensagens(texto, is_nome_item, reforcar_marcadores=False, marcadores_
         if marcadores_esperados:
             sequencia_marcadores = ", ".join(marcadores_esperados)
             instrucao += (
-                f"[CONSTANTS: [{sequencia_marcadores}]]:"
+                f"{delirio} [{sequencia_marcadores}]]:"
             )
 
     return [
